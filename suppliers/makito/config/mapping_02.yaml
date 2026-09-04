@@ -1,0 +1,141 @@
+# =====================================================================
+#  Mapping import MAKITO (sigla 02) -> importer Custom OnPage
+#  Unico punto da ritoccare per regole di conversione: colori, cicli,
+#  brand, catena listini, magazzino, esclusioni.
+#  NOTA: le sezioni marcate TODO verranno completate dopo l'analisi
+#  dello snapshot reale (data/snapshot/) e le risposte di Daniele.
+# =====================================================================
+
+fornitore:
+  sigla: "02"
+  nome: "MAKITO ITALIA SRL EX ASIATRADE"
+  # ATTENZIONE (bug pagato su F79): questo e' il moltiplicatore della raccolta
+  # fornitore (3.5), MAI l'1.06 di fornitori_erp. L'importer lo copia su ogni
+  # variante e il generatore prezzi usa la precedenza variante>articolo>fornitore.
+  moltiplicatoreVendita: 3.5
+  # Record<string,string> richiesto dall'importer. Valori da OnPage (fornitori_erp id 92329388, erp_id 47410).
+  codiceFornitoreERP:
+    erp_id: "47410"
+  fornitoreErpIds: [92329388]           # NON 92329935 (quello e' Torregrossa)
+
+parametriImport:
+  rendiObsoletiArticoliNonPresenti: false   # modalita' sempre parziale; obsoleti gestiti a parte
+  gestioneImmagini: "sostituisci"           # sync ricorrente (da confermare con Daniele)
+  gestioneGiacenze: "sostituisci"
+
+chiavi:
+  articolo: "02-{ref}"                      # chiave articolo
+  variante: "02-{ref}-{colore}-{taglia}"    # convenzione F79; matnr conservato in codiceFornitore
+
+magazzino:
+  codice: "MAKITO"
+  nome: "Makito"
+
+lingua: 3                                   # italiano; niente contenuti multilingua
+
+# Semantica verificata sul portale nuovo (snapshot 03/09/2026, ref 16009):
+# righe {material, quantity} senza availableDate = giacenza attuale -> dataArrivo null;
+# righe con availableDate = arrivi futuri -> dataArrivo ISO. Il feed ripete le righe
+# datate con id interni diversi ma stesso material+quantita'+data: dedup per valore.
+# (Il dubbio stock vs stock_availability riguardava solo l'API storica, non usata.)
+giacenze:
+  attuale_da_righe_senza_data: true
+  arrivi_da_righe_datate: true
+  dedup_per: [material, quantity, availableDate]
+
+# Decisione Daniele 03/09/2026: prezzi Makito importati cosi' come sono, nessuno
+# sconto/catena, come "acquisto rivenditori" (corretto dal primo giro che li
+# caricava come "acquisto pubblico").
+# Formato verificato (price-list /files): una voce per ref con currency EUR,
+# baseQuantity "1000" e scales [{quantity, amount}]: amount e' il prezzo per
+# baseQuantity pezzi (es. 232.00 EUR / 1000 pz = 0.232 EUR/pz).
+listino:
+  decimali: 4                               # Decimal HALF_UP, mai float (prezzi unitari sotto il centesimo)
+  base_quantity_divisore: true              # amount / baseQuantity = prezzo unitario
+  tipologie:
+    - {tipologiaListino: "acquisto rivenditori", base: "makito"}
+
+# Decisione Daniele 03/09/2026: importare anche gli articoli del catalogo
+# THEINFINITE_CATALOG se compatibili col formato (oltre al GENERAL_CATALOG).
+cataloghi: [GENERAL_CATALOG, THEINFINITE_CATALOG]
+
+# Conversioni unita' Makito -> importer (verificate su ref 15246: cartone 20 pz
+# 480x255x330 mm / 7.3 kg; confezione 360 g; pallet 840 pz / 306.6 kg):
+# dimensioni prodotto e imballi in mm -> cm (/10); pf_weight in g -> kg (/1000);
+# ptc_weight e pallet_weight gia' in kg.
+
+immagini:
+  tipologia_gallery: "Immagine dettaglio"   # detail_images del catalogo
+
+taglie:
+  null_per_codici: ["000", "0"]             # "S/T" (senza taglia) -> taglia null (importer assegna "Unica")
+
+colori_null_per_codici: ["000"]             # "S/C" (sin color) -> colore null (importer assegna "Unico")
+
+# Cicli (decisione Daniele 03/09/2026): NON gestiti dalla sync. Il campo "ciclo"
+# non viene proprio inviato nel JSON, cosi' l'importer non tocca i cicli inseriti
+# a mano su OnPage, nemmeno ai giri successivi.
+cicli: non_gestiti
+
+brand:
+  default: "MAKITO"                         # TODO: confermare con Daniele
+
+# ---------------------------------------------------------------------
+# Colore filtro web OnPage (ids verificati via MCP il 03/09/2026)
+# ---------------------------------------------------------------------
+filtri_web:
+  nero: 58873859
+  bianco: 58873860
+  grigio: 58873861
+  rosso_bordeaux: 58873862
+  giallo: 58873863
+  verde: 58873864
+  azzurro_blu: 58873866
+  rosa_fucsia_viola: 58873867
+  marrone_kaki: 58873868
+  arancione_corallo: 58873870
+  fantasia_multicolor: 58873872
+  naturale_beige: 58873875
+  metallizzati: 58873877
+  trasparente: 58873880
+
+# Assegnazione filtro web + esadecimale di base dal NOME ITALIANO del colore
+# (catalog /colors, 551 codici). Vince la prima regex che matcha; i colori senza
+# match finiscono nelle anomalie "da confermare" e si risolvono aggiungendo una
+# regola o una voce in colori_override. Gli hex sono indicativi (il feed non li
+# fornisce): correggibili qui, foglio "Colori" del report per la revisione.
+colori_regole:
+  # forme/soggetti usati da Makito come "colore" (antistress, stampi, magneti...):
+  # niente filtro web ne' esadecimale, e nessuna anomalia (id null = accettato senza filtro)
+  - {match: "^(CERCHIO|RETTANGOLO|PIAZZA|QUADRATO|OVALE|PALLA|STAR|STELLA|CUORE|OCCHIALI|WINK|SMILE|ALBERO|RENO|PAPAI NOEL|URSO|ORSO|CAT|ELEFANTE|RANA|CANE|PIG|CASA|AUTO|CAPPELLO|PUPAZZO DI NEVE|TENNIS|CALCIO|GOLF|BASKET|FOGLIAME|FIORE|CALZINO|ANATRA|ROTONDO|PAPA NOEL|TIPO [A-Z])$", id: null}
+  - {match: "TRASPARENTE|TRANSPARENT|TRASL|TRANSL|CRISTALLO|CLEAR", id: 58873880, esadecimale: "#EAF4F8"}
+  - {match: "BIANCO|WHITE|BRANCO|NEVE|NATURALE NEUTRO", id: 58873860, esadecimale: "#FFFFFF"}
+  - {match: "NERO|BLACK",                        id: 58873859, esadecimale: "#000000"}
+  - {match: "GRIGIO|GREY|GRAY|ANTRACITE|GRAFITE|TITANIO", id: 58873861, esadecimale: "#8E8E8E"}
+  - {match: "BORDEAUX|GRANAT|BURDEOS",           id: 58873862, esadecimale: "#7B1E2B"}
+  - {match: "ROSSO|RED|MORANGO",                 id: 58873862, esadecimale: "#E20713"}
+  - {match: "GIALLO|YELLOW|AMARELO|LIMON|MOSTAZA|MOSTARDA|ANANAS", id: 58873863, esadecimale: "#FFD500"}
+  - {match: "VERDE|GREEN|MENTA|SALVIA|OLIVA|KELLY|LIMA|KIWI|PISTACHO|APPLE|AGUACATE", id: 58873864, esadecimale: "#009B45"}
+  - {match: "AZZURRO|CELESTE|CIELO|SKY|TURCHESE|ACQUA", id: 58873866, esadecimale: "#5BB4E5"}
+  - {match: "BLU|MARINO|MARINEO|NAVY|ROYAL|COBALTO|PETROLIO|DENIM", id: 58873866, esadecimale: "#0E5094"}
+  - {match: "ROSA|PINK|SALMONE|PITAYA",                 id: 58873867, esadecimale: "#F4A6C0"}
+  - {match: "FUCSIA|FUCHSIA|MAGENTA",            id: 58873867, esadecimale: "#D5007F"}
+  - {match: "VIOLA|LILLA|LAVANDA|PURPLE|MALVA|PORPORA|UVA", id: 58873867, esadecimale: "#7F3F98"}
+  - {match: "MARRON|BROWN|KAKI|CACHI|CUOIO|CIOCCOLATO|CAFFE|TERRA", id: 58873868, esadecimale: "#6D4536"}
+  - {match: "ARANCIO|ORANGE|CORALLO|MANDARINO",            id: 58873870, esadecimale: "#F07F1A"}
+  - {match: "MULTICOLOR|FANTASIA|ASSORTIT|RAINBOW|CAMUFLAGEM|CAMOUFLAGE|SANDIA|BANDIERA|ESPANHA|SPAGNA|ANDALUCIA|ALEMAN|PAISES", id: 58873872, esadecimale: "#C757A3"}
+  - {match: "BEIGE|BEGE|NATURALE|AVORIO|CREMA|SABBIA|ARENA|ECRU|BAMBOO|SUGHERO|LEGNO", id: 58873875, esadecimale: "#D9C29A"}
+  - {match: "ORO|GOLD|DORATO|DORADO",            id: 58873877, esadecimale: "#C9A227"}
+  - {match: "ARGENTO|SILVER|PLATED|PLATA|METALLIZZATO|CROMATO|ALLUMINIO|ACCIAIO|STEEL", id: 58873877, esadecimale: "#C0C0C0"}
+
+# Override puntuali per codice colore Makito (vincono sulle regole):
+colori_override:
+  # 712 "Natural Claro" non compare in /colors (visto su ref 20751, pareo Botari)
+  "712": {nome: "Naturale chiaro", esadecimali: ["#EDE3D2"], coloreFiltroWebId: 58873875}
+
+# Decisione Daniele 03/09/2026: NON scartare nulla, importare anche gli articoli
+# senza prezzo (listini vuoti) e il materiale promozionale/cataloghi.
+esclusioni: {}
+
+# Esclusi dal perimetro (decisione Daniele 03/09/2026): tecniche/aree di stampa,
+# lead time, contenuti non italiani. intrastat/printcode non gestiti dal formato.
