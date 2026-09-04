@@ -7,6 +7,7 @@ macchina protetti da header x-api-key confrontato in tempo costante.
 from __future__ import annotations
 
 import hmac
+import json
 import threading
 
 import requests as rq
@@ -67,6 +68,21 @@ def run(fornitore: str, job: str,
 def status(x_api_key: str | None = Header(default=None), key: str | None = Query(default=None)):
     _check_key(x_api_key, key)
     return {"in_corso": _run_in_corso, "ultimi_run": {"makito": state.ultimi_run("makito")}}
+
+
+@app.get("/send-log/{fornitore}")
+def send_log(fornitore: str, n: int = Query(default=50, le=500),
+             solo_errori: bool = Query(default=True),
+             x_api_key: str | None = Header(default=None), key: str | None = Query(default=None)):
+    """Ultime righe del log invii (default: solo i falliti, per diagnosi)."""
+    _check_key(x_api_key, key)
+    p = state.dir_fornitore(fornitore) / "send_log.jsonl"
+    if not p.exists():
+        return {"righe": []}
+    righe = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if solo_errori:
+        righe = [r for r in righe if not r.get("ok")]
+    return {"totale": len(righe), "righe": righe[-n:]}
 
 
 # -------------------------------------------------------- proxy immagini ----

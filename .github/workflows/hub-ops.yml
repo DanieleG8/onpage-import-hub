@@ -17,6 +17,7 @@ on:
           - health
           - img-test
           - status
+          - errori
           - bootstrap
           - stock
           - prezzi
@@ -49,6 +50,10 @@ jobs:
               ;;
             status)
               curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status"
+              ;;
+            errori)
+              curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" \
+                "$HUB_URL/send-log/makito?n=20&solo_errori=true"
               ;;
             *)
               echo "== avvio job $azione =="
