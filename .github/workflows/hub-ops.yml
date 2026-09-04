@@ -1,0 +1,76 @@
+name: Hub ops
+
+# Ponte operativo verso il servizio Railway (la sandbox Claude non raggiunge
+# up.railway.app): ogni azione chiama il hub via HTTPS e stampa la risposta nei
+# log del run. Le azioni che lanciano un job fanno anche polling dello /status
+# fino a fine corsa. Richiede il secret HUB_API_KEY (stesso valore di Railway).
+
+on:
+  workflow_dispatch:
+    inputs:
+      azione:
+        description: "Azione sul hub"
+        required: true
+        type: choice
+        default: health
+        options:
+          - health
+          - img-test
+          - status
+          - bootstrap
+          - stock
+          - prezzi
+          - prodotti
+          - full
+
+env:
+  HUB_URL: https://onpage-import-hub-production.up.railway.app
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Esegui azione sul hub
+        env:
+          HUB_API_KEY: ${{ secrets.HUB_API_KEY }}
+        run: |
+          set -o pipefail
+          azione="${{ inputs.azione }}"
+          case "$azione" in
+            health)
+              curl -sS -m 60 "$HUB_URL/health"
+              ;;
+            img-test)
+              curl -sS -m 120 -o /tmp/img.jpg \
+                -w "HTTP %{http_code} content-type=%{content_type} bytes=%{size_download}\n" \
+                "$HUB_URL/img/makito/15246/principal/5246-W.jpg"
+              file /tmp/img.jpg || true
+              ;;
+            status)
+              curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status"
+              ;;
+            *)
+              echo "== avvio job $azione =="
+              curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
+                "$HUB_URL/run/makito/$azione"
+              echo
+              echo "== polling /status ogni 30 s fino a fine run =="
+              sleep 20
+              for i in $(seq 1 680); do
+                s=$(curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status" || echo '{}')
+                echo "[poll $i] $s"
+                attivo=$(printf '%s' "$s" | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d={}
+print("si" if d.get("in_corso") else "no")')
+                if [ "$attivo" = "no" ] && [ "$i" -gt 1 ]; then
+                  echo "== run terminato =="
+                  break
+                fi
+                sleep 30
+              done
+              echo "== esito finale =="
+              curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status"
+              ;;
+          esac
