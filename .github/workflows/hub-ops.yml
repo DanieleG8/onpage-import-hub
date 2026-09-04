@@ -16,6 +16,7 @@ on:
         options:
           - health
           - img-test
+          - img-url
           - status
           - errori
           - bootstrap
@@ -23,6 +24,10 @@ on:
           - prezzi
           - prodotti
           - full
+      percorso:
+        description: "Percorsi immagine per img-url (separati da spazio)"
+        required: false
+        default: ""
 
 env:
   HUB_URL: https://onpage-import-hub-production.up.railway.app
@@ -41,6 +46,14 @@ jobs:
           case "$azione" in
             health)
               curl -sS -m 60 "$HUB_URL/health"
+              ;;
+            img-url)
+              # testa uno o piu' percorsi (separati da spazio) passati in "percorso"
+              for p in ${{ inputs.percorso }}; do
+                curl -sS -m 120 -o /dev/null \
+                  -w "$p -> HTTP %{http_code} type=%{content_type} bytes=%{size_download}\n" \
+                  "$HUB_URL/img/makito/$p" || true
+              done
               ;;
             img-test)
               curl -sS -m 120 -o /tmp/img.jpg \
