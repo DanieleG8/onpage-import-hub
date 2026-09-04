@@ -18,8 +18,11 @@ import requests
 from . import state
 from .config import IMPORTER_TOKEN, IMPORTER_URL, SEND_WORKERS
 
-# visto sul campo: errore importer transitorio ("Cannot assign null to property
-# ...$json_data") su un articolo grosso, riuscito al tentativo successivo
+# visti sul campo, tutti transitori e riusciti a un tentativo successivo:
+# errorType "system" ("Cannot assign null to property ...$json_data"),
+# 404 "No query results for model [ProjectJobFile]" (race interna dell'exporter),
+# 504 Gateway Time-out di nginx (importer oltre i 60 s su un articolo).
+# Si ritenta quindi tutto tranne gli errori di validazione (deterministici).
 RETRY_SYSTEM = 2
 RETRY_WAIT_S = (30, 120)
 
@@ -48,7 +51,8 @@ def invia_uno(chiave: str, payload: dict) -> dict:
         except requests.RequestException as e:
             body = {"error": True, "errorType": "network", "message": str(e)}
         ok = (body.get("_http_status", 599) < 400) and not body.get("error")
-        if ok or body.get("errorType") not in ("system", "network") or i == tentativi - 1:
+        riprovabile = (not ok) and body.get("errorType") != "validation"
+        if ok or not riprovabile or i == tentativi - 1:
             rec.update(ok=ok, response={k: v for k, v in body.items() if k != "_http_status"},
                        http_status=body.get("_http_status"), tentativi=i + 1,
                        elapsed_s=round(time.time() - t0, 2))
