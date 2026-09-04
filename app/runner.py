@@ -93,6 +93,16 @@ def run_job(job: str) -> dict:
 
         # 3. delta: si inviano solo gli articoli con payload diverso dall'ultimo inviato ok
         hashes = state.load_hashes("makito")
+        if job in ("stock", "prezzi", "prodotti") and not hashes:
+            # senza hash un job delta rimanderebbe TUTTI gli articoli (~10 h):
+            # succede solo se il bootstrap non e' mai girato o se lo stato e' andato
+            # perso (Volume /data non montato). Meglio fermarsi e segnalarlo.
+            esito = {"job": job, "esito": "stato_vuoto",
+                     "errore": "nessun hash registrato: eseguire bootstrap (o full); "
+                               "verificare che il Volume /data sia montato",
+                     "durata_s": round(time.time() - t0, 1)}
+            state.append_run("makito", esito)
+            return esito
         payloads: dict[str, dict] = {}
         totale = 0
         for f in sorted((out / "json").glob("*.json")):
