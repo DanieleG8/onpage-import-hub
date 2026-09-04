@@ -60,10 +60,7 @@ jobs:
               for i in $(seq 1 680); do
                 s=$(curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status" || echo '{}')
                 echo "[poll $i] $s"
-                attivo=$(printf '%s' "$s" | python3 -c 'import json,sys
-try: d=json.load(sys.stdin)
-except Exception: d={}
-print("si" if d.get("in_corso") else "no")')
+                if printf '%s' "$s" | grep -q '"in_corso":{}'; then attivo=no; else attivo=si; fi
                 if [ "$attivo" = "no" ] && [ "$i" -gt 1 ]; then
                   echo "== run terminato =="
                   break
