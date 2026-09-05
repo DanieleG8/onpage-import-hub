@@ -20,6 +20,7 @@ on:
           - status
           - errori
           - reinvia-falliti
+          - riarma
           - bootstrap
           - stock
           - prezzi
@@ -27,6 +28,14 @@ on:
           - full
       percorso:
         description: "Percorsi immagine per img-url (separati da spazio)"
+        required: false
+        default: ""
+      chiavi:
+        description: "Chiavi articolo per riarma (separate da spazio)"
+        required: false
+        default: ""
+      workers:
+        description: "Worker per i job di invio (vuoto = default 3)"
         required: false
         default: ""
 
@@ -65,6 +74,14 @@ jobs:
             status)
               curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status"
               ;;
+            riarma)
+              printf '%s' "${{ inputs.chiavi }}" \
+                | python3 -c 'import json,sys; print(json.dumps({"chiavi": sys.stdin.read().split()}))' \
+                > /tmp/chiavi.json
+              curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
+                -H "content-type: application/json" -d @/tmp/chiavi.json \
+                "$HUB_URL/riarma/makito"
+              ;;
             reinvia-falliti)
               curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
                 "$HUB_URL/reinvia-falliti/makito"
@@ -75,8 +92,10 @@ jobs:
               ;;
             *)
               echo "== avvio job $azione =="
+              W=""
+              if [ -n "${{ inputs.workers }}" ]; then W="?workers=${{ inputs.workers }}"; fi
               curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
-                "$HUB_URL/run/makito/$azione"
+                "$HUB_URL/run/makito/$azione$W"
               echo
               echo "== polling /status ogni 30 s fino a fine run =="
               sleep 20

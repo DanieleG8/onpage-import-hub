@@ -77,7 +77,7 @@ def _senza_immagini(payload: dict) -> dict:
     return p
 
 
-def run_job(job: str) -> dict:
+def run_job(job: str, workers: int | None = None) -> dict:
     """Esegue un job end-to-end; ritorna il riepilogo (registrato anche in runs.jsonl)."""
     if job not in ("stock", "prezzi", "prodotti", "full", "bootstrap"):
         raise ValueError(f"job sconosciuto: {job}")
@@ -174,7 +174,8 @@ def run_job(job: str) -> dict:
             return esito
 
         # 4. invio parallelo
-        contatori = invia_lotto("makito", payloads, stati_nuovi=stati_nuovi) if payloads \
+        contatori = invia_lotto("makito", payloads, workers=workers,
+                                stati_nuovi=stati_nuovi) if payloads \
             else {"inviati_ok": 0, "errori": 0}
         esito = {"job": job, "esito": "ok" if contatori.get("errori", 0) == 0 else "errori_parziali",
                  "articoli_totali": totale, "da_inviare": len(payloads), "solo_dati": solo_dati,

@@ -11,7 +11,7 @@ import json
 import threading
 
 import requests as rq
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Body, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import config, state
@@ -40,10 +40,10 @@ def health():
 _run_in_corso: dict = {}
 
 
-def _esegui(fornitore: str, job: str):
+def _esegui(fornitore: str, job: str, workers: int | None = None):
     try:
         _run_in_corso[fornitore] = job
-        run_job(job)
+        run_job(job, workers=workers)
     except Exception as e:                                    # noqa: BLE001
         state.append_run(fornitore, {"job": job, "esito": "eccezione", "errore": str(e)[:500]})
     finally:
@@ -52,6 +52,7 @@ def _esegui(fornitore: str, job: str):
 
 @app.post("/run/{fornitore}/{job}")
 def run(fornitore: str, job: str,
+        workers: int | None = Query(default=None, ge=1, le=6),
         x_api_key: str | None = Header(default=None),
         key: str | None = Query(default=None)):
     _check_key(x_api_key, key)
@@ -60,14 +61,28 @@ def run(fornitore: str, job: str,
     if _run_in_corso.get(fornitore):
         return JSONResponse({"ok": False, "reason": "run_gia_in_corso",
                              "job_attivo": _run_in_corso[fornitore]}, status_code=409)
-    threading.Thread(target=_esegui, args=(fornitore, job), daemon=True).start()
-    return {"ok": True, "avviato": job}
+    threading.Thread(target=_esegui, args=(fornitore, job, workers), daemon=True).start()
+    return {"ok": True, "avviato": job, "workers": workers}
 
 
 @app.get("/status")
 def status(x_api_key: str | None = Header(default=None), key: str | None = Query(default=None)):
     _check_key(x_api_key, key)
     return {"in_corso": _run_in_corso, "ultimi_run": {"makito": state.ultimi_run("makito")}}
+
+
+@app.post("/riarma/{fornitore}")
+def riarma(fornitore: str, chiavi: list[str] = Body(embed=True),
+           x_api_key: str | None = Header(default=None),
+           key: str | None = Query(default=None)):
+    """Toglie dallo stato gli hash delle chiavi indicate: il prossimo job delta
+    le rimanda con payload completo e gestioneImmagini='sostituisci'. Serve per
+    il ciclo di riparazione immagini (chiavi individuate su OnPage via MCP)."""
+    _check_key(x_api_key, key)
+    hashes = state.load_hashes(fornitore)
+    riarmate = [k for k in chiavi if hashes.pop(k, None) is not None]
+    state.save_hashes(fornitore, hashes)
+    return {"chiavi_riarmate": len(riarmate), "sconosciute": len(chiavi) - len(riarmate)}
 
 
 @app.post("/reinvia-falliti/{fornitore}")
