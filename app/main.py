@@ -71,6 +71,20 @@ def status(x_api_key: str | None = Header(default=None), key: str | None = Query
     return {"in_corso": _run_in_corso, "ultimi_run": {"makito": state.ultimi_run("makito")}}
 
 
+@app.get("/payload/{fornitore}/{chiave}")
+def payload(fornitore: str, chiave: str,
+            x_api_key: str | None = Header(default=None),
+            key: str | None = Query(default=None)):
+    """Payload convertito dell'ultimo run (per diagnosi: URL immagini, listini...)."""
+    _check_key(x_api_key, key)
+    if ".." in chiave or "/" in chiave:
+        raise HTTPException(400, detail="chiave non valida")
+    p = state.dir_fornitore(fornitore) / "work" / "out" / "json" / f"{chiave}.json"
+    if not p.exists():
+        raise HTTPException(404, detail="chiave non trovata nell'ultimo run")
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
 @app.post("/riarma/{fornitore}")
 def riarma(fornitore: str, chiavi: list[str] = Body(embed=True),
            x_api_key: str | None = Header(default=None),

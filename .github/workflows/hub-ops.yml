@@ -21,6 +21,7 @@ on:
           - errori
           - reinvia-falliti
           - riarma
+          - payload
           - bootstrap
           - stock
           - prezzi
@@ -73,6 +74,13 @@ jobs:
               ;;
             status)
               curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status"
+              ;;
+            payload)
+              for c in ${{ inputs.chiavi }}; do
+                echo "== payload $c: articolo.immagine e prima variante =="
+                curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/payload/makito/$c" \
+                  | python3 -c 'import json,sys; a=json.load(sys.stdin)["articolo"]; v=(a.get("varianti") or [{}])[0]; print(json.dumps({"immagine": a.get("immagine"), "gallery": a.get("immagini"), "var0_immagine": v.get("immagine")}, ensure_ascii=False))'
+              done
               ;;
             riarma)
               printf '%s' "${{ inputs.chiavi }}" \
