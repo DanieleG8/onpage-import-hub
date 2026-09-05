@@ -109,7 +109,9 @@ class Convertitore:
                 filtro = cfw["mappa"].get(web)
                 if filtro is None:
                     self.warn(chiave, "colore filtro web non mappato", web, "warning")
-        return {"codice": codice or "000", "nome": nome or None,
+        # l'importer esige colore.nome stringa: se il feed non ha il nome
+        # (visto sul full del 05/09/2026) si ripiega sul codice
+        return {"codice": codice or "000", "nome": nome or codice,
                 "esadecimali": [], "coloreFiltroWebId": filtro}
 
     # ----------------------------------------------------------- descrizione --
@@ -165,8 +167,15 @@ class Convertitore:
                 else:
                     self.warn(chiave, "sku senza prezzo", sku, "info")
 
+                # taglia "0" = senza taglia nel feed NWG, e l'importer rifiuta
+                # "0" come codice (lo tratta come vuoto): meglio taglia null,
+                # cosi' l'importer assegna "Unica"
                 nome_taglia = (s.get("name") or "").strip()
                 cod_taglia = (s.get("size") or "").strip()
+                if nome_taglia == "0":
+                    nome_taglia = ""
+                if cod_taglia == "0":
+                    cod_taglia = ""
                 varianti.append({
                     "codiceFornitore": sku,
                     "codiceVariante": chiave_v,
