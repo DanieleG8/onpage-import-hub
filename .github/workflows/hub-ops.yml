@@ -19,6 +19,7 @@ on:
           - img-url
           - status
           - errori
+          - reinvia-falliti
           - bootstrap
           - stock
           - prezzi
@@ -63,6 +64,10 @@ jobs:
               ;;
             status)
               curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status"
+              ;;
+            reinvia-falliti)
+              curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
+                "$HUB_URL/reinvia-falliti/makito"
               ;;
             errori)
               curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" \

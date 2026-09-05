@@ -70,6 +70,29 @@ def status(x_api_key: str | None = Header(default=None), key: str | None = Query
     return {"in_corso": _run_in_corso, "ultimi_run": {"makito": state.ultimi_run("makito")}}
 
 
+@app.post("/reinvia-falliti/{fornitore}")
+def reinvia_falliti(fornitore: str,
+                    x_api_key: str | None = Header(default=None),
+                    key: str | None = Query(default=None)):
+    """Riarma gli articoli il cui ULTIMO invio e' fallito: toglie i loro hash dallo
+    stato, cosi' il prossimo job delta li rimanda. Serve dopo un full con errori
+    parziali (gli hash dei falliti restano quelli del bootstrap e il delta li salta)."""
+    _check_key(x_api_key, key)
+    p = state.dir_fornitore(fornitore) / "send_log.jsonl"
+    if not p.exists():
+        return {"chiavi_riarmate": 0, "chiavi": []}
+    esiti: dict[str, bool] = {}
+    for l in p.read_text(encoding="utf-8").splitlines():
+        if l.strip():
+            r = json.loads(l)
+            esiti[r["chiave"]] = bool(r.get("ok"))
+    falliti = [k for k, ok in esiti.items() if not ok]
+    hashes = state.load_hashes(fornitore)
+    riarmate = [k for k in falliti if hashes.pop(k, None) is not None]
+    state.save_hashes(fornitore, hashes)
+    return {"chiavi_riarmate": len(riarmate), "chiavi": sorted(riarmate)[:50]}
+
+
 @app.get("/send-log/{fornitore}")
 def send_log(fornitore: str, n: int = Query(default=50, le=500),
              solo_errori: bool = Query(default=True),
