@@ -45,6 +45,38 @@ def _proxy_url(testo: str) -> str:
     return testo.replace(ASSET_PREFIX, f"{PUBLIC_BASE_URL}/img/makito/")
 
 
+def _hash_diviso(payload: dict) -> dict:
+    """Doppia impronta: 'd' = dati (payload senza immagini), 'i' = solo immagini.
+    Permette il giro veloce solo-dati quando cambiano giacenze/prezzi ma non le foto."""
+    return {"d": state.hash_payload(_senza_immagini(payload)),
+            "i": state.hash_payload(_solo_immagini(payload))}
+
+
+def _solo_immagini(payload: dict) -> dict:
+    a = payload["articolo"]
+    return {"immagine": a.get("immagine"), "ambientata": a.get("immagineAmbientata"),
+            "gallery": a.get("immagini") or [],
+            "varianti": {v.get("codiceVariante"): {"immagine": v.get("immagine"),
+                                                   "immagini": v.get("immagini") or []}
+                         for v in a.get("varianti") or []}}
+
+
+def _senza_immagini(payload: dict) -> dict:
+    """Copia del payload senza immagini e con gestioneImmagini='aggiungi': con la
+    lista vuota l'importer non tocca le immagini esistenti e salta la coda di
+    download (idea di Daniele, 05/09/2026) -> chiamate molto piu' veloci."""
+    p = json.loads(json.dumps(payload, ensure_ascii=False))
+    p["parametriImport"] = {**p.get("parametriImport", {}), "gestioneImmagini": "aggiungi"}
+    a = p["articolo"]
+    a["immagine"] = None
+    a["immagineAmbientata"] = None
+    a["immagini"] = []
+    for v in a.get("varianti") or []:
+        v["immagine"] = None
+        v["immagini"] = []
+    return p
+
+
 def run_job(job: str) -> dict:
     """Esegue un job end-to-end; ritorna il riepilogo (registrato anche in runs.jsonl)."""
     if job not in ("stock", "prezzi", "prodotti", "full", "bootstrap"):
@@ -104,18 +136,36 @@ def run_job(job: str) -> dict:
             state.append_run("makito", esito)
             return esito
         payloads: dict[str, dict] = {}
+        stati_nuovi: dict[str, dict] = {}
+        solo_dati = 0
         totale = 0
         for f in sorted((out / "json").glob("*.json")):
             totale += 1
             payload = json.loads(_proxy_url(f.read_text(encoding="utf-8")))
             chiave = payload["articolo"]["chiaveArticolo"]
+            nuovo = _hash_diviso(payload)
             if job == "bootstrap":
-                # niente invio: il full e' appena stato caricato da GitHub Actions;
+                # niente invio: il carico completo e' gia' su OnPage;
                 # da qui in poi partiranno solo le differenze reali
-                hashes[chiave] = state.hash_payload(payload)
+                hashes[chiave] = nuovo
                 continue
-            if job == "full" or hashes.get(chiave) != state.hash_payload(payload):
-                payloads[chiave] = payload
+            vecchio = hashes.get(chiave)
+            if isinstance(vecchio, str):
+                # stato in formato vecchio (hash unico): se il payload completo e'
+                # identico non c'e' nulla da fare, altrimenti reinvio completo
+                if job != "full" and vecchio == state.hash_payload(payload):
+                    continue
+                vecchio = None
+            if job != "full" and vecchio and vecchio.get("d") == nuovo["d"] \
+                    and vecchio.get("i") == nuovo["i"]:
+                continue
+            if job != "full" and vecchio and vecchio.get("i") == nuovo["i"]:
+                # immagini invariate rispetto all'ultimo invio ok: giro veloce
+                # solo-dati (gestioneImmagini='aggiungi', nessun URL passato)
+                payload = _senza_immagini(payload)
+                solo_dati += 1
+            payloads[chiave] = payload
+            stati_nuovi[chiave] = nuovo
         if job == "bootstrap":
             state.save_hashes("makito", hashes)
             esito = {"job": job, "esito": "ok", "articoli_totali": totale, "da_inviare": 0,
@@ -124,9 +174,10 @@ def run_job(job: str) -> dict:
             return esito
 
         # 4. invio parallelo
-        contatori = invia_lotto("makito", payloads) if payloads else {"inviati_ok": 0, "errori": 0}
+        contatori = invia_lotto("makito", payloads, stati_nuovi=stati_nuovi) if payloads \
+            else {"inviati_ok": 0, "errori": 0}
         esito = {"job": job, "esito": "ok" if contatori.get("errori", 0) == 0 else "errori_parziali",
-                 "articoli_totali": totale, "da_inviare": len(payloads), **contatori,
-                 "durata_s": round(time.time() - t0, 1)}
+                 "articoli_totali": totale, "da_inviare": len(payloads), "solo_dati": solo_dati,
+                 **contatori, "durata_s": round(time.time() - t0, 1)}
         state.append_run("makito", esito)
         return esito

@@ -61,9 +61,12 @@ def invia_uno(chiave: str, payload: dict) -> dict:
     return rec  # non raggiunto
 
 
-def invia_lotto(fornitore: str, payloads: dict[str, dict], workers: int | None = None) -> dict:
+def invia_lotto(fornitore: str, payloads: dict[str, dict], workers: int | None = None,
+                stati_nuovi: dict[str, object] | None = None) -> dict:
     """Invia i payload (chiave -> CustomImportRequest) in parallelo.
-    Aggiorna send_log e, per gli ok, gli hash di stato. Ritorna contatori."""
+    Aggiorna send_log e, per gli ok, gli hash di stato: il valore salvato per una
+    chiave e' stati_nuovi[chiave] se fornito (doppia impronta dati/immagini del
+    runner), altrimenti l'hash del payload inviato. Ritorna contatori."""
     workers = workers or SEND_WORKERS
     hashes = state.load_hashes(fornitore)
     n_ok = n_err = 0
@@ -75,7 +78,8 @@ def invia_lotto(fornitore: str, payloads: dict[str, dict], workers: int | None =
             state.append_send_log(fornitore, rec)
             if rec.get("ok"):
                 n_ok += 1
-                hashes[rec["chiave"]] = state.hash_payload(payloads[rec["chiave"]])
+                hashes[rec["chiave"]] = (stati_nuovi or {}).get(rec["chiave"]) \
+                    or state.hash_payload(payloads[rec["chiave"]])
                 if n_ok % 50 == 0:
                     state.save_hashes(fornitore, hashes)  # checkpoint periodico
             else:
