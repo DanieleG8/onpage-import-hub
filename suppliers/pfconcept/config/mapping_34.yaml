@@ -1,0 +1,83 @@
+# Mapping fornitore 34 - PF CONCEPT ITALIA SRL (deciso con Daniele il 05/09/2026)
+#
+# - prezzi: netti EUR a scaglioni dal price feed -> tipologia "acquisto riservato"
+# - moltiplicatoreVendita 3.5 (impostato da Daniele sulla scheda 34)
+# - fornitore ERP: PF CONCEPT ITALIA SRL erp_id 47086 (fornitori_erp id 92328878)
+# - importare TUTTO: anche isDiscontinued=true e l'assortimento WS
+# - feed di stampa ESCLUSI (come Makito)
+# - giacenze: stockDirect = attuale; stockNextPo con stockDateNextPo = arrivo
+#   futuro datato; StockFuture senza data NON importabile (ignorato)
+# - immagini via live link (manuale datafeed v3.6.7, cap. Images - Option 2)
+#
+# FUORI dal formato Custom: EAN, genere, categorie/gruppi, paese origine,
+# HS code, attributi pa_*, temi, cataloghi, articoli correlati, video,
+# dati/prezzi di stampa, greenPoints.
+
+fornitore:
+  sigla: "34"
+  nome: "PF CONCEPT ITALIA SRL"
+  moltiplicatoreVendita: 3.5
+  codiceFornitoreERP:
+    erp_id: "47086"
+  fornitoreErpIds: [92328878]
+
+parametriImport:
+  rendiObsoletiArticoliNonPresenti: false
+  gestioneImmagini: "sostituisci"
+  gestioneGiacenze: "sostituisci"
+
+listino:
+  tipologiaListino: "acquisto riservato"
+  valuta_attesa: "EUR"
+
+magazzino:
+  codice: "PFCONCEPT"
+  nome: "PF Concept"
+
+immagini:
+  base_url: "https://images.pfconcept.com/ProductImages_All/JPG/1600x1600/"
+  # campo imageData -> tipologia gallery OnPage (imageLogoY* e imagePackage esclusi:
+  # sono template di stampa/packaging)
+  tipologie:
+    imageFront: "Immagine fronte"
+    imageBack: "Immagine retro"
+    imageDetail1: "Immagine dettaglio"
+    imageDetail2: "Immagine dettaglio"
+    imageDetail3: "Immagine dettaglio"
+    imageExtra1: "Immagine dettaglio"
+    imageExtra2: "Immagine dettaglio"
+    imageExtra3: "Immagine dettaglio"
+    imageGroup: "Immagine dettaglio"
+    imageModel: "Immagine indossato"
+    imageMood1: "Immagine ambientata"
+
+# baseColor del feed (gia' quasi tutto in italiano) -> id colore_filtro_web OnPage
+colori_filtro_web:
+  multicolor: 58873872
+  mappa:
+    nero: 58873859
+    Nero: 58873859
+    "Solido Bianco": 58873860
+    Bianco: 58873860
+    Grigio: 58873861
+    Rosso: 58873862
+    Bordeaux: 58873862
+    Giallo: 58873863
+    Verde: 58873864
+    Blue: 58873866
+    Blu: 58873866
+    Azzurro: 58873866
+    Rosa: 58873867
+    Porpora: 58873867
+    Viola: 58873867
+    Marrone: 58873868
+    Kaki: 58873868
+    Naturale: 58873875
+    Beige: 58873875
+    Arancio: 58873870
+    Arancione: 58873870
+    Corallo: 58873870
+    "Multi-colore": 58873872
+    Argento: 58873877
+    Oro: 58873877
+    Metallizzato: 58873877

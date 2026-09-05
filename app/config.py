@@ -33,6 +33,12 @@ CRON_MAKITO_PREZZI = os.environ.get("CRON_MAKITO_PREZZI", "40 4 * * *")      # o
 CRON_MAKITO_PRODOTTI = os.environ.get("CRON_MAKITO_PRODOTTI", "10 3 * * 1")  # lunedi'
 # NWG: spento di default finche' il collaudo non e' concluso
 CRON_NWG_PRODOTTI = os.environ.get("CRON_NWG_PRODOTTI", "")
+# PF Concept: spenti di default finche' il collaudo non e' concluso.
+# Cadenze consigliate dal fornitore: stock 2x/giorno (mattina e ~13:00),
+# prodotti giornaliero, prezzi settimanale (aggiornati nel weekend).
+CRON_PF_STOCK = os.environ.get("CRON_PF_STOCK", "")        # es. "0 5,11 * * *"
+CRON_PF_PRODOTTI = os.environ.get("CRON_PF_PRODOTTI", "")  # es. "20 2 * * *"
+CRON_PF_PREZZI = os.environ.get("CRON_PF_PREZZI", "")      # es. "50 2 * * 1"
 
 
 def not_configured() -> list[str]:

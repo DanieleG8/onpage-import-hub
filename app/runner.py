@@ -42,6 +42,7 @@ def _carica(nome: str, percorso: Path):
 
 _MAKITO = REPO_ROOT / "suppliers" / "makito"
 _NWG = REPO_ROOT / "suppliers" / "nwg"
+_PF = REPO_ROOT / "suppliers" / "pfconcept"
 sys.path.insert(0, str(_MAKITO))          # i moduli Makito storici si importano tra pari
 makito_fetch = _carica("makito_fetch", _MAKITO / "fetch_makito.py")
 makito_convert = _carica("makito_convert", _MAKITO / "convert.py")
@@ -49,6 +50,9 @@ makito_validate = _carica("makito_validate", _MAKITO / "validate.py")
 nwg_fetch = _carica("nwg_fetch", _NWG / "fetch_nwg.py")
 nwg_convert = _carica("nwg_convert", _NWG / "convert.py")
 nwg_validate = _carica("nwg_validate", _NWG / "validate.py")
+pf_fetch = _carica("pf_fetch", _PF / "fetch_pfconcept.py")
+pf_convert = _carica("pf_convert", _PF / "convert.py")
+pf_validate = _carica("pf_validate", _PF / "validate.py")
 
 ASSET_PREFIX = "https://apis.makito.es/catalog/assets/"
 
@@ -72,6 +76,17 @@ FORNITORI = {
         "convert": nwg_convert, "validate": nwg_validate,
         "mapping": _NWG / "config" / "mapping_a1.yaml",
         "proxy": False,                   # immagini NWG pubbliche
+    },
+    "pfconcept": {
+        "jobs": {"stock": "stock", "prezzi": "prezzi", "prodotti": "tutto",
+                 "full": "tutto", "bootstrap": "tutto"},
+        "fetch": lambda work, cache, refresh: pf_fetch.main(
+            ["--out", str(work / "raw"), "--refresh", refresh,
+             "--dumps-cache", str(cache)]),
+        "snapshot": lambda work: work / "raw" / "snapshot",
+        "convert": pf_convert, "validate": pf_validate,
+        "mapping": _PF / "config" / "mapping_34.yaml",
+        "proxy": False,                   # immagini PF pubbliche (live link)
     },
 }
 

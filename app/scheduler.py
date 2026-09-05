@@ -32,5 +32,8 @@ def avvia_scheduler(esegui, in_corso: dict) -> BackgroundScheduler:
     pianifica("makito", "prezzi", config.CRON_MAKITO_PREZZI)
     pianifica("makito", "prodotti", config.CRON_MAKITO_PRODOTTI)
     pianifica("nwg", "prodotti", config.CRON_NWG_PRODOTTI)
+    pianifica("pfconcept", "stock", config.CRON_PF_STOCK)
+    pianifica("pfconcept", "prodotti", config.CRON_PF_PRODOTTI)
+    pianifica("pfconcept", "prezzi", config.CRON_PF_PREZZI)
     sched.start()
     return sched
