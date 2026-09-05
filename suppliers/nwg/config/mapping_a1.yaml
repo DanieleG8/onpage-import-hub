@@ -15,7 +15,8 @@ fornitore:
   sigla: "A1"
   nome: "NEW WAVE"
   moltiplicatoreVendita: null      # da impostare in futuro (decisione 05/09/2026)
-  codiceFornitoreERP: "47828"      # NEW WAVE ITALIA SRL (fornitori_erp id 92329806)
+  codiceFornitoreERP:              # NEW WAVE ITALIA SRL (fornitori_erp id 92329806)
+    erp_id: "47828"
   fornitoreErpIds: [92329806]
 
 parametriImport:
