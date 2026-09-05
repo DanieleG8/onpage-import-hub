@@ -27,6 +27,14 @@ on:
           - prezzi
           - prodotti
           - full
+      fornitore:
+        description: "Fornitore (makito | nwg)"
+        required: false
+        default: "makito"
+      solo:
+        description: "Chiavi da inviare (separate da spazio) per run mirati"
+        required: false
+        default: ""
       percorso:
         description: "Percorsi immagine per img-url (separati da spazio)"
         required: false
@@ -54,6 +62,8 @@ jobs:
         run: |
           set -o pipefail
           azione="${{ inputs.azione }}"
+          F="${{ inputs.fornitore }}"
+          F="${F:-makito}"
           case "$azione" in
             health)
               curl -sS -m 60 "$HUB_URL/health"
@@ -78,7 +88,7 @@ jobs:
             payload)
               for c in ${{ inputs.chiavi }}; do
                 echo "== payload $c: articolo.immagine e prima variante =="
-                curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/payload/makito/$c" \
+                curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/payload/$F/$c" \
                   | python3 -c 'import json,sys; a=json.load(sys.stdin)["articolo"]; v=(a.get("varianti") or [{}])[0]; print(json.dumps({"immagine": a.get("immagine"), "gallery": a.get("immagini"), "var0_immagine": v.get("immagine")}, ensure_ascii=False))'
               done
               ;;
@@ -88,22 +98,26 @@ jobs:
                 > /tmp/chiavi.json
               curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
                 -H "content-type: application/json" -d @/tmp/chiavi.json \
-                "$HUB_URL/riarma/makito"
+                "$HUB_URL/riarma/$F"
               ;;
             reinvia-falliti)
               curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
-                "$HUB_URL/reinvia-falliti/makito"
+                "$HUB_URL/reinvia-falliti/$F"
               ;;
             errori)
               curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" \
-                "$HUB_URL/send-log/makito?n=20&solo_errori=true"
+                "$HUB_URL/send-log/$F?n=20&solo_errori=true"
               ;;
             *)
-              echo "== avvio job $azione =="
-              W=""
-              if [ -n "${{ inputs.workers }}" ]; then W="?workers=${{ inputs.workers }}"; fi
+              echo "== avvio job $azione ($F) =="
+              Q=""
+              if [ -n "${{ inputs.workers }}" ]; then Q="workers=${{ inputs.workers }}"; fi
+              SOLO="${{ inputs.solo }}"
+              if [ -n "$SOLO" ]; then
+                Q="$Q&solo=$(printf '%s' "$SOLO" | tr ' ' ',')"
+              fi
               curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
-                "$HUB_URL/run/makito/$azione$W"
+                "$HUB_URL/run/$F/$azione?$Q"
               echo
               echo "== polling /status ogni 30 s fino a fine run =="
               sleep 20

@@ -16,20 +16,21 @@ from . import config
 def avvia_scheduler(esegui, in_corso: dict) -> BackgroundScheduler:
     sched = BackgroundScheduler(timezone="UTC")
 
-    def pianifica(nome_job: str, cron: str):
+    def pianifica(fornitore: str, nome_job: str, cron: str):
         if not cron.strip():
             return
 
         def tick():
-            if in_corso.get("makito"):
+            if in_corso.get(fornitore):
                 return  # giro saltato: un job e' gia' attivo, il prossimo recupera
-            esegui("makito", nome_job)
+            esegui(fornitore, nome_job)
 
-        sched.add_job(tick, CronTrigger.from_crontab(cron), id=f"makito-{nome_job}",
+        sched.add_job(tick, CronTrigger.from_crontab(cron), id=f"{fornitore}-{nome_job}",
                       coalesce=True, max_instances=1, misfire_grace_time=600)
 
-    pianifica("stock", config.CRON_MAKITO_STOCK)
-    pianifica("prezzi", config.CRON_MAKITO_PREZZI)
-    pianifica("prodotti", config.CRON_MAKITO_PRODOTTI)
+    pianifica("makito", "stock", config.CRON_MAKITO_STOCK)
+    pianifica("makito", "prezzi", config.CRON_MAKITO_PREZZI)
+    pianifica("makito", "prodotti", config.CRON_MAKITO_PRODOTTI)
+    pianifica("nwg", "prodotti", config.CRON_NWG_PRODOTTI)
     sched.start()
     return sched

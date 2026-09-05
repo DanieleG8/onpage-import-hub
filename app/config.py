@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 # stato persistente (Railway Volume montato su /data; in locale una dir qualsiasi)
-STATE_DIR = Path(os.environ.get("STATE_DIR", "/data"))
+STATE_DIR = Path(os.environ.get("STATE_DIR", "/data")).resolve()
 
 # URL pubblico del hub (per gli URL immagine via proxy nei payload)
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
@@ -31,6 +31,8 @@ SEND_WORKERS = int(os.environ.get("SEND_WORKERS", "3"))
 CRON_MAKITO_STOCK = os.environ.get("CRON_MAKITO_STOCK", "12 * * * *")        # ogni ora
 CRON_MAKITO_PREZZI = os.environ.get("CRON_MAKITO_PREZZI", "40 4 * * *")      # ogni giorno
 CRON_MAKITO_PRODOTTI = os.environ.get("CRON_MAKITO_PRODOTTI", "10 3 * * 1")  # lunedi'
+# NWG: spento di default finche' il collaudo non e' concluso
+CRON_NWG_PRODOTTI = os.environ.get("CRON_NWG_PRODOTTI", "")
 
 
 def not_configured() -> list[str]:

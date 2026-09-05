@@ -15,7 +15,7 @@ from fastapi import Body, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import config, state
-from .runner import run_job
+from .runner import FORNITORI, run_job
 from .scheduler import avvia_scheduler
 
 app = FastAPI(title="onpage-import-hub", docs_url=None, redoc_url=None)
@@ -40,10 +40,11 @@ def health():
 _run_in_corso: dict = {}
 
 
-def _esegui(fornitore: str, job: str, workers: int | None = None):
+def _esegui(fornitore: str, job: str, workers: int | None = None,
+            solo: list[str] | None = None):
     try:
         _run_in_corso[fornitore] = job
-        run_job(job, workers=workers)
+        run_job(fornitore, job, workers=workers, solo=solo)
     except Exception as e:                                    # noqa: BLE001
         state.append_run(fornitore, {"job": job, "esito": "eccezione", "errore": str(e)[:500]})
     finally:
@@ -53,22 +54,27 @@ def _esegui(fornitore: str, job: str, workers: int | None = None):
 @app.post("/run/{fornitore}/{job}")
 def run(fornitore: str, job: str,
         workers: int | None = Query(default=None, ge=1, le=6),
+        solo: str | None = Query(default=None),
         x_api_key: str | None = Header(default=None),
         key: str | None = Query(default=None)):
     _check_key(x_api_key, key)
-    if fornitore != "makito":
+    if fornitore not in FORNITORI:
         raise HTTPException(404, detail="fornitore sconosciuto")
     if _run_in_corso.get(fornitore):
         return JSONResponse({"ok": False, "reason": "run_gia_in_corso",
                              "job_attivo": _run_in_corso[fornitore]}, status_code=409)
-    threading.Thread(target=_esegui, args=(fornitore, job, workers), daemon=True).start()
-    return {"ok": True, "avviato": job, "workers": workers}
+    chiavi = [c for c in (solo or "").replace(" ", ",").split(",") if c] or None
+    threading.Thread(target=_esegui, args=(fornitore, job, workers, chiavi),
+                     daemon=True).start()
+    return {"ok": True, "avviato": job, "fornitore": fornitore,
+            "workers": workers, "solo": chiavi}
 
 
 @app.get("/status")
 def status(x_api_key: str | None = Header(default=None), key: str | None = Query(default=None)):
     _check_key(x_api_key, key)
-    return {"in_corso": _run_in_corso, "ultimi_run": {"makito": state.ultimi_run("makito")}}
+    return {"in_corso": _run_in_corso,
+            "ultimi_run": {f: state.ultimi_run(f) for f in FORNITORI}}
 
 
 @app.get("/payload/{fornitore}/{chiave}")

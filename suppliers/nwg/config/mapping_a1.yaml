@@ -1,0 +1,84 @@
+# Mapping fornitore A1 - NEW WAVE / NWG (deciso con Daniele il 05/09/2026)
+#
+# - moltiplicatoreVendita: VUOTO per ora (verra' impostato in futuro su OnPage):
+#   si registra SOLO il listino "acquisto rivenditori" da customerPrice (EUR),
+#   nessun prezzo di vendita (retailPrice escluso).
+# - colori doppi nel filtro web (es. "Yellow;Black") -> Fantasia/Multicolor.
+# - importare TUTTI gli articoli del feed.
+#
+# FUORI dal formato Custom (documentato, non mappabile oggi):
+#   giacenze (assenti nel feed: servono le API stock NWG), EAN, documenti PDF,
+#   genere, categorie/gruppi, paese origine, codice doganale, articoli
+#   correlati/sostitutivi, leadTime, retailPrice, image360link.
+
+fornitore:
+  sigla: "A1"
+  nome: "NEW WAVE"
+  moltiplicatoreVendita: null      # da impostare in futuro (decisione 05/09/2026)
+  codiceFornitoreERP: null
+  fornitoreErpIds: []              # scheda A1 su OnPage senza fornitore ERP collegato
+
+parametriImport:
+  rendiObsoletiArticoliNonPresenti: false
+  gestioneImmagini: "sostituisci"
+  gestioneGiacenze: "sostituisci"
+
+listino:
+  tipologiaListino: "acquisto rivenditori"
+  valuta_attesa: "EUR"
+
+# webColors (inglese NWG) -> id colore_filtro_web OnPage.
+# Valori multipli separati da ";" -> multicolor.
+colori_filtro_web:
+  multicolor: 58873872             # Fantasia/Multicolor
+  mappa:
+    Black: 58873859                # Nero
+    White: 58873860                # Bianco
+    Grey: 58873861                 # Grigio
+    Red: 58873862                  # Rosso/Bordeaux
+    Bordeaux: 58873862
+    Yellow: 58873863               # Giallo
+    Green: 58873864                # Verde
+    Blue: 58873866                 # Azzurro/Blu
+    NavyBlue: 58873866
+    Turquoise: 58873866
+    Pink: 58873867                 # Rosa/Fucsia/Viola
+    Purple: 58873867
+    Brown: 58873868                # Marrone/Kaki
+    Khaki: 58873868
+    Olive: 58873868
+    Beige: 58873875                # Naturale/Beige
+    Nature: 58873875
+    Orange: 58873870               # Arancione/Corallo
+    Coral: 58873870
+    Multicolour: 58873872
+    Silver: 58873877               # Metallizzati
+    Gold: 58873877
+
+immagini:
+  # type/angle del feed -> tipologia gallery OnPage
+  tipologie:
+    front: "Immagine fronte"
+    back: "Immagine retro"
+    left: "Immagine lato"
+    right: "Immagine lato"
+    closeup1: "Immagine dettaglio"
+    closeup2: "Immagine dettaglio"
+    closeup3: "Immagine dettaglio"
+    none: "Immagine dettaglio"
+  tipologia_ambientata: "Immagine ambientata"
+  tipologia_modello: "Immagine indossato"
+
+descrizione:
+  # blocchi accodati a description.it (solo se valorizzati e non duplicati)
+  blocchi:
+    - {campo: productFabrics, etichetta: "Tessuto"}
+    - {campo: productFit, etichetta: "Vestibilita'"}
+    - {campo: productNeckline, etichetta: "Collo"}
+    - {campo: productSleeve, etichetta: "Maniche"}
+    - {campo: productPockets, etichetta: "Tasche"}
+    - {campo: productHoodDetails, etichetta: "Cappuccio"}
+    - {campo: productClosure, etichetta: "Chiusura"}
+    - {campo: productFeature, etichetta: "Caratteristiche"}
+    - {campo: productCertification, etichetta: "Certificazioni"}
+    - {campo: careInstructions, etichetta: "Lavaggio"}

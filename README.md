@@ -35,11 +35,20 @@ caricamento completo fatto dal repo `F02`.
 ## Struttura
 
 ```
-app/        main.py (API+proxy), scheduler.py, runner.py, sender.py, state.py, config.py
+app/        main.py (API+proxy), scheduler.py, runner.py (registry fornitori),
+            sender.py, state.py, config.py
 suppliers/
   makito/   moduli portati dal repo F02: fetch_makito.py (con --refresh/--dumps-cache),
             convert.py, validate.py, report.py, config/mapping_02.yaml
+  nwg/      NEW WAVE (A1): fetch_nwg.py (feed unico dall'URL in NWG_FEED_URL),
+            convert.py, validate.py, config/mapping_a1.yaml. Immagini pubbliche
+            (niente proxy); giacenze assenti nel feed (in attesa delle API stock
+            NWG); moltiplicatoreVendita null e solo listino "acquisto rivenditori"
+            (decisioni Daniele 05/09/2026). Cron CRON_NWG_PRODOTTI, default spento.
 ```
+
+Job per fornitore: makito stock/prezzi/prodotti/full/bootstrap; nwg prodotti/full/bootstrap.
+Run mirati: `POST /run/{fornitore}/{job}?workers=N&solo=CHIAVE1,CHIAVE2`.
 
 Le regole di conversione (colori, listini "acquisto rivenditori", giacenze attuale+arrivi,
 cicli MAI inviati perche' gestiti a mano su OnPage) restano in `suppliers/makito/config/mapping_02.yaml`
