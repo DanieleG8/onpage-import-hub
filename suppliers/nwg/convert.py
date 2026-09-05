@@ -157,8 +157,9 @@ class Convertitore:
                 if prezzo:
                     if valuta != self.cfg["listino"]["valuta_attesa"]:
                         self.warn(chiave, "valuta inattesa", f"{sku}: {valuta}", "error")
-                    listini = [{"tipologiaListino": tip_listino, "scaglione": 1,
-                                "quantitaDa": 1, "quantitaA": None, "multipli": None,
+                    # l'importer esige scaglione stringa e multipli numerico
+                    listini = [{"tipologiaListino": tip_listino, "scaglione": "1",
+                                "quantitaDa": 1, "quantitaA": None, "multipli": 1,
                                 "prezzo": float(Decimal(str(prezzo)).quantize(
                                     Decimal("0.0001"), rounding=ROUND_HALF_UP))}]
                 else:

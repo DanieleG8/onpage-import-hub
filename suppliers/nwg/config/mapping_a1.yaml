@@ -15,8 +15,8 @@ fornitore:
   sigla: "A1"
   nome: "NEW WAVE"
   moltiplicatoreVendita: null      # da impostare in futuro (decisione 05/09/2026)
-  codiceFornitoreERP: null
-  fornitoreErpIds: []              # scheda A1 su OnPage senza fornitore ERP collegato
+  codiceFornitoreERP: "47828"      # NEW WAVE ITALIA SRL (fornitori_erp id 92329806)
+  fornitoreErpIds: [92329806]
 
 parametriImport:
   rendiObsoletiArticoliNonPresenti: false
