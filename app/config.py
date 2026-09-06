@@ -27,10 +27,13 @@ IMPORTER_TOKEN = os.environ.get("IMPORTER_TOKEN", "")
 # invio parallelo
 SEND_WORKERS = int(os.environ.get("SEND_WORKERS", "3"))
 
-# scheduler (cron in UTC); vuoto = job disattivato
-CRON_MAKITO_STOCK = os.environ.get("CRON_MAKITO_STOCK", "12 * * * *")        # ogni ora
-CRON_MAKITO_PREZZI = os.environ.get("CRON_MAKITO_PREZZI", "40 4 * * *")      # ogni giorno
-CRON_MAKITO_PRODOTTI = os.environ.get("CRON_MAKITO_PRODOTTI", "10 3 * * 1")  # lunedi'
+# scheduler (cron in UTC). Per Makito la variabile VUOTA ricade sul default
+# (il 06/09 delle CRON_MAKITO_* vuote su Railway hanno spento i giri per ore);
+# per spegnere un cron Makito mettere "off" (scartato e visibile in /health).
+# Per NWG/PF invece vuoto = job disattivato (default: spenti fino al collaudo).
+CRON_MAKITO_STOCK = os.environ.get("CRON_MAKITO_STOCK") or "12 * * * *"        # ogni ora
+CRON_MAKITO_PREZZI = os.environ.get("CRON_MAKITO_PREZZI") or "40 4 * * *"      # ogni giorno
+CRON_MAKITO_PRODOTTI = os.environ.get("CRON_MAKITO_PRODOTTI") or "10 3 * * 1"  # lunedi'
 # NWG: spento di default finche' il collaudo non e' concluso
 CRON_NWG_PRODOTTI = os.environ.get("CRON_NWG_PRODOTTI", "")
 # PF Concept: spenti di default finche' il collaudo non e' concluso.
