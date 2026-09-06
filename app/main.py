@@ -33,7 +33,8 @@ def _check_key(x_api_key: str | None, key_qs: str | None):
 # --------------------------------------------------------------- health -----
 @app.get("/health")
 def health():
-    return {"ok": True, "not_configured": config.not_configured()}
+    from .scheduler import stato_cron
+    return {"ok": True, "not_configured": config.not_configured(), "cron": stato_cron}
 
 
 # ------------------------------------------------------------ run / status --

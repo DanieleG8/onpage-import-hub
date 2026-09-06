@@ -12,9 +12,16 @@ from apscheduler.triggers.cron import CronTrigger
 
 from . import config
 
+# Stato esposto da /health: cron registrati e variabili con espressioni non
+# valide. Un'espressione malformata non deve fermare gli altri cron ne'
+# l'avvio dell'app (successo il 06/09/2026 col deploy delle variabili NWG/PF).
+stato_cron: dict = {"attivi": [], "scartati": {}}
+
 
 def avvia_scheduler(esegui, in_corso: dict) -> BackgroundScheduler:
     sched = BackgroundScheduler(timezone="UTC")
+    stato_cron["attivi"] = []
+    stato_cron["scartati"] = {}
 
     def pianifica(fornitore: str, nome_job: str, cron: str):
         if not cron.strip():
@@ -25,8 +32,12 @@ def avvia_scheduler(esegui, in_corso: dict) -> BackgroundScheduler:
                 return  # giro saltato: un job e' gia' attivo, il prossimo recupera
             esegui(fornitore, nome_job)
 
-        sched.add_job(tick, CronTrigger.from_crontab(cron), id=f"{fornitore}-{nome_job}",
-                      coalesce=True, max_instances=1, misfire_grace_time=600)
+        try:
+            sched.add_job(tick, CronTrigger.from_crontab(cron), id=f"{fornitore}-{nome_job}",
+                          coalesce=True, max_instances=1, misfire_grace_time=600)
+            stato_cron["attivi"].append(f"{fornitore}-{nome_job} [{cron}]")
+        except ValueError as e:
+            stato_cron["scartati"][f"{fornitore}-{nome_job}"] = f"{cron!r}: {e}"
 
     pianifica("makito", "stock", config.CRON_MAKITO_STOCK)
     pianifica("makito", "prezzi", config.CRON_MAKITO_PREZZI)

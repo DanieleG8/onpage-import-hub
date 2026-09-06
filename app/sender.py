@@ -51,7 +51,11 @@ def invia_uno(chiave: str, payload: dict) -> dict:
         except requests.RequestException as e:
             body = {"error": True, "errorType": "network", "message": str(e)}
         ok = (body.get("_http_status", 599) < 400) and not body.get("error")
-        riprovabile = (not ok) and body.get("errorType") != "validation"
+        # "JSON data not provided" arriva marcato "validation" ma e' un glitch
+        # transitorio dell'exporter (visto risolversi da solo): va ritentato.
+        transitorio_mascherato = "JSON data not provided" in str(body.get("message", ""))
+        riprovabile = (not ok) and (body.get("errorType") != "validation"
+                                    or transitorio_mascherato)
         if ok or not riprovabile or i == tentativi - 1:
             rec.update(ok=ok, response={k: v for k, v in body.items() if k != "_http_status"},
                        http_status=body.get("_http_status"), tentativi=i + 1,
