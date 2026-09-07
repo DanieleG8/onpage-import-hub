@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import urllib.parse
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
@@ -48,8 +49,13 @@ class Convertitore:
 
     # -------------------------------------------------------------- immagini --
     def img(self, nome: str | None) -> str | None:
-        nome = (nome or "").strip()
-        return self.cfg["immagini"]["base_url"] + nome if nome else None
+        # dati sporchi visti nel feed (full del 06/09): piu' nomi separati da
+        # virgola ("a.jpg, b.jpg" -> si tiene il primo) e nomi con spazi
+        # ("X - Copy.jpg" -> percent-encoding, l'importer esige URL validi)
+        nome = (nome or "").split(",")[0].strip()
+        if not nome:
+            return None
+        return self.cfg["immagini"]["base_url"] + urllib.parse.quote(nome)
 
     def galleria(self, image_data: dict, escludi: set) -> list[dict]:
         righe, viste = [], set(escludi)
@@ -112,10 +118,12 @@ class Convertitore:
         righe = []
         attuale = stock_item.get("stockDirect")
         if attuale is not None:
-            righe.append({"magazzino": mag, "quantita": int(attuale), "dataArrivo": None})
+            # nel feed compaiono stock negativi (es. -24): l'importer esige >= 0
+            righe.append({"magazzino": mag, "quantita": max(0, int(attuale)),
+                          "dataArrivo": None})
         prossimo = stock_item.get("stockNextPo") or 0
         data = (stock_item.get("stockDateNextPo") or "").strip()
-        if prossimo and data:
+        if prossimo > 0 and data:
             righe.append({"magazzino": mag, "quantita": int(prossimo), "dataArrivo": data[:10]})
         return righe
 
