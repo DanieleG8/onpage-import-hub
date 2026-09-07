@@ -118,8 +118,9 @@ class Convertitore:
                                 "prezzo": pub})
 
             taglia = testo(r["taglia"])
-            if taglia.upper() == "UD":
-                taglia = ""                    # taglia unica -> null
+            if taglia.upper() in ("UD", "0"):
+                taglia = ""                    # taglia unica/assente -> null
+                                               # ("0" rifiutata dall'importer, come NWG)
             img = testo(r["img"]) or None
             img2 = testo(r["img2"]) or None
             try:
@@ -182,7 +183,10 @@ class Convertitore:
                 "chiaveArticolo": chiave,
                 "moltiplicatoreVenditaArticolo": None,
                 "descrizioneBreve": testo(primo["nome"]) or modello,
-                "descrizioneLunga": "\n\n".join(b for b in blocchi if b),
+                # l'importer esige descrizioneLunga valorizzata: se il catalogo
+                # non ha descrizioni si ripiega sul nome commerciale
+                "descrizioneLunga": "\n\n".join(b for b in blocchi if b)
+                                    or testo(primo["nome"]) or modello,
                 "immagine": img_art,
                 "immagineAmbientata": None,
                 "immagini": [],
