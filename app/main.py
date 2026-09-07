@@ -92,6 +92,29 @@ def payload(fornitore: str, chiave: str,
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+@app.get("/schema/{fornitore}")
+def schema_fornitore(fornitore: str,
+                     x_api_key: str | None = Header(default=None),
+                     key: str | None = Query(default=None)):
+    """Struttura attesa dei file depositati a mano (fogli + colonne) e
+    candidati in attesa dopo un esito 'struttura_file_diversa'. La copia di
+    riferimento del primo file elaborato resta sul Volume (schema/riferimento_*)."""
+    _check_key(x_api_key, key)
+    from .schema_guard import stato
+    return stato(state.dir_fornitore(fornitore) / "schema")
+
+
+@app.post("/schema/{fornitore}/accetta")
+def schema_accetta(fornitore: str,
+                   x_api_key: str | None = Header(default=None),
+                   key: str | None = Query(default=None)):
+    """Promuove il nuovo tracciato (candidato) a struttura attesa: da usare
+    SOLO quando il cambio di formato del fornitore e' voluto e verificato."""
+    _check_key(x_api_key, key)
+    from .schema_guard import accetta
+    return {"promossi": accetta(state.dir_fornitore(fornitore) / "schema")}
+
+
 @app.post("/riarma/{fornitore}")
 def riarma(fornitore: str, chiavi: list[str] = Body(embed=True),
            x_api_key: str | None = Header(default=None),

@@ -100,6 +100,7 @@ FORNITORI = {
         "convert": garys_convert, "validate": garys_validate,
         "mapping": _GARYS / "config" / "mapping_a3.yaml",
         "proxy": False,                   # immagini su cdn.shopify.com, pubbliche
+        "schema_guard": True,             # file depositati a mano: struttura vigilata
     },
 }
 
@@ -177,6 +178,21 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
                      "log": log_fetch.getvalue()[-2000:]}
             state.append_run(fornitore, esito)
             return esito
+
+        # 1b. guardia di struttura sui file depositati a mano: se il tracciato
+        # e' cambiato rispetto al riferimento, NIENTE import (Daniele va
+        # avvisato; la struttura attesa e' su GET /schema/{fornitore})
+        if cfg.get("schema_guard"):
+            from .schema_guard import verifica
+            differenze = []
+            for f in sorted(cfg["snapshot"](work).glob("*.xls*")):
+                differenze += [f"{f.name}: {d}" for d in verifica(base / "schema", f)]
+            if differenze:
+                esito = {"job": job, "esito": "struttura_file_diversa",
+                         "differenze": differenze[:20],
+                         "durata_s": round(time.time() - t0, 1)}
+                state.append_run(fornitore, esito)
+                return esito
 
         # 2. convert + validate (sempre completi)
         out = work / "out"
