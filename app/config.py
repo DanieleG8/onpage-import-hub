@@ -42,6 +42,9 @@ CRON_NWG_PRODOTTI = os.environ.get("CRON_NWG_PRODOTTI", "")
 CRON_PF_STOCK = os.environ.get("CRON_PF_STOCK", "")        # es. "0 5,11 * * *"
 CRON_PF_PRODOTTI = os.environ.get("CRON_PF_PRODOTTI", "")  # es. "20 2 * * *"
 CRON_PF_PREZZI = os.environ.get("CRON_PF_PREZZI", "")      # es. "50 2 * * 1"
+# GARY'S: i file arrivano dal deposito manuale su Dropbox -> niente cron di
+# default; quando il deposito sara' automatico basta valorizzare la variabile.
+CRON_GARYS_PRODOTTI = os.environ.get("CRON_GARYS_PRODOTTI", "")
 
 
 def not_configured() -> list[str]:

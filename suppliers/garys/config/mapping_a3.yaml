@@ -1,0 +1,120 @@
+# Mapping fornitore A3 - GARY'S (Gary's Uniformes, deciso con Daniele il 07/09/2026)
+#
+# Sorgenti (cartella Dropbox condivisa, un solo fetch):
+#   catalogo.xlsx  export Shopify/Upango: una riga per SKU (EAN, modello,
+#                  colore, taglia, riferimento interno, prezzo pubblico,
+#                  stock, descrizioni, immagini, peso, dogana)
+#   listino.xls    "Listino Prezzi": foglio "PREZZO CON IL TUO SCONTO"
+#                  = prezzo d'acquisto per referenza (senza scaglioni)
+#
+# Decisioni:
+# - TUTTI i modelli (outlet compresi); chi non ha prezzo d'acquisto a
+#   listino resta SENZA quella riga listino (niente prezzo inventato).
+# - "PREZZO CON IL TUO SCONTO" -> tipologia "acquisto riservato";
+#   "Prezzo pubblico del sito web" (per SKU) -> tipologia "acquisto pubblico".
+# - moltiplicatoreVendita: VUOTO per ora (scheda A3 su OnPage senza valore).
+# - taglia "UD" = taglia unica -> null (l'importer assegna "Unica").
+#
+# FUORI dal formato Custom (documentato, non mappabile oggi):
+#   EAN (colonna presente ma il formato non lo gestisce), video, PDF file,
+#   URL icona colore, categorie (professione/articolo/collezione), codice e
+#   nome doganale, flag Outlet, fogli listino "TARIFFA RISERVATA" e "PVC
+#   minimo", volume (unita' non dichiarata nel file).
+
+fornitore:
+  sigla: "A3"
+  nome: "garys"                    # come la raccolta fornitore su OnPage
+  moltiplicatoreVendita: null
+  codiceFornitoreERP:              # GARY'S UNIFORMES SLU (fornitori_erp id 111656386)
+    erp_id: "77110"
+  fornitoreErpIds: [111656386]
+
+parametriImport:
+  rendiObsoletiArticoliNonPresenti: false
+  gestioneImmagini: "sostituisci"
+  gestioneGiacenze: "sostituisci"
+
+listino:
+  tipologia_acquisto: "acquisto riservato"     # dal listino Dropbox
+  tipologia_pubblico: "acquisto pubblico"      # dal catalogo (prezzo sito)
+  foglio_acquisto: "PREZZO CON IL TUO SCONTO"
+
+magazzino:
+  codice: "GARYS"
+  nome: "Magazzino Gary's"
+
+# Colore -> id colore_filtro_web OnPage. I nomi sono in spagnolo e sono
+# centinaia: si mappa per PAROLA CHIAVE (prima che compare nel nome vince);
+# i bicolore "X/Y" vanno dritti su Fantasia/Multicolor.
+# REGOLA (Daniele, 07/09/2026, vale per TUTTI i fornitori): codici e nomi
+# colore del fornitore non si modificano mai; solo il filtro web e' dedotto.
+colori_filtro_web:
+  multicolor: 58873872             # Fantasia/Multicolor
+  parole:                          # ordine = priorita'
+    NEGRO: 58873859                # Nero
+    BLANCO: 58873860               # Bianco
+    WHITE: 58873860
+    CRUDO: 58873875                # Naturale/Beige
+    HUESO: 58873875
+    BEIGE: 58873875
+    ARENA: 58873875
+    NUDE: 58873875
+    CAMEL: 58873875
+    TOPO: 58873875
+    NATURAL: 58873875
+    MARENGO: 58873861              # Grigio
+    GRIS: 58873861
+    PLOMO: 58873861
+    ANTRACITA: 58873861
+    BURDEOS: 58873862              # Rosso/Bordeaux
+    GRANATE: 58873862
+    ROJO: 58873862
+    AMARILLO: 58873863             # Giallo
+    MOSTAZA: 58873863
+    LIMON: 58873863
+    CAQUI: 58873864                # Verde (verde caqui, caqui claro...)
+    PISTACHO: 58873864
+    VERDE: 58873864
+    MUSGO: 58873864
+    OLIVA: 58873864
+    ESMERALDA: 58873864
+    MARINO: 58873866               # Azzurro/Blu
+    NAVY: 58873866
+    AZUL: 58873866
+    AZULINA: 58873866
+    CELESTE: 58873866
+    TURQUESA: 58873866
+    ROYAL: 58873866
+    DENIM: 58873866
+    VAQUERO: 58873866
+    PETROLEO: 58873866
+    INDIGO: 58873866
+    MALVA: 58873867                # Rosa/Fucsia/Viola
+    LILA: 58873867
+    MORADO: 58873867
+    ROSA: 58873867
+    FUCSIA: 58873867
+    FRAMBUESA: 58873867
+    VIOLETA: 58873867
+    MARRON: 58873868               # Marrone/Kaki
+    CHOCOLATE: 58873868
+    CALDERA: 58873868
+    NARANJA: 58873870              # Arancione/Corallo
+    CORAL: 58873870
+    ESTAMPADO: 58873872            # Fantasia/Multicolor
+    MULTICOLOR: 58873872
+    # integrazioni dal censimento del catalogo (07/09/2026)
+    BLACK: 58873859
+    WINE: 58873862
+    OLIVE: 58873864
+    CENIZA: 58873861
+    ZAFIRO: 58873866
+    AGUA: 58873866
+    TEJANO: 58873866
+    BERENJENA: 58873867
+    CREMA: 58873875
+    VAINILLA: 58873875
+    COCONUT: 58873875
+    MARFIL: 58873875
+    # i restanti nomi di fantasia (ALBERO, TUCAN, PARAISO...) restano senza
+    # filtro web: e' ammesso, si integrano qui man mano che serve

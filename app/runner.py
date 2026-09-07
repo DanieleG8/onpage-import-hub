@@ -53,6 +53,10 @@ nwg_validate = _carica("nwg_validate", _NWG / "validate.py")
 pf_fetch = _carica("pf_fetch", _PF / "fetch_pfconcept.py")
 pf_convert = _carica("pf_convert", _PF / "convert.py")
 pf_validate = _carica("pf_validate", _PF / "validate.py")
+_GARYS = REPO_ROOT / "suppliers" / "garys"
+garys_fetch = _carica("garys_fetch", _GARYS / "fetch_garys.py")
+garys_convert = _carica("garys_convert", _GARYS / "convert.py")
+garys_validate = _carica("garys_validate", _GARYS / "validate.py")
 
 ASSET_PREFIX = "https://apis.makito.es/catalog/assets/"
 
@@ -87,6 +91,15 @@ FORNITORI = {
         "convert": pf_convert, "validate": pf_validate,
         "mapping": _PF / "config" / "mapping_34.yaml",
         "proxy": False,                   # immagini PF pubbliche (live link)
+    },
+    "garys": {
+        "jobs": {"prodotti": "tutto", "full": "tutto", "bootstrap": "tutto"},
+        "fetch": lambda work, cache, refresh: garys_fetch.main(
+            ["--out", str(work / "raw"), "--dumps-cache", str(cache)]),
+        "snapshot": lambda work: work / "raw" / "snapshot",
+        "convert": garys_convert, "validate": garys_validate,
+        "mapping": _GARYS / "config" / "mapping_a3.yaml",
+        "proxy": False,                   # immagini su cdn.shopify.com, pubbliche
     },
 }
 

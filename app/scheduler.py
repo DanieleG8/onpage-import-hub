@@ -46,5 +46,6 @@ def avvia_scheduler(esegui, in_corso: dict) -> BackgroundScheduler:
     pianifica("pfconcept", "stock", config.CRON_PF_STOCK)
     pianifica("pfconcept", "prodotti", config.CRON_PF_PRODOTTI)
     pianifica("pfconcept", "prezzi", config.CRON_PF_PREZZI)
+    pianifica("garys", "prodotti", config.CRON_GARYS_PRODOTTI)
     sched.start()
     return sched
