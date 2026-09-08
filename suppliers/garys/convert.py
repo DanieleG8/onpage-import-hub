@@ -55,6 +55,13 @@ def testo(x) -> str:
     return str(x).strip() if x is not None else ""
 
 
+def urls(x) -> list[str]:
+    """Le celle immagine possono contenere PIU' URL separati da virgola
+    (visto su A3-116500: la cella 'Link per scaricare le foto' porta
+    l'intera gallery): si splitta e si tengono solo gli http(s)."""
+    return [u.strip() for u in testo(x).split(",") if u.strip().startswith("http")]
+
+
 class Convertitore:
     def __init__(self, cfg: dict, out: Path):
         self.cfg = cfg
@@ -121,8 +128,9 @@ class Convertitore:
             if taglia.upper() in ("UD", "0"):
                 taglia = ""                    # taglia unica/assente -> null
                                                # ("0" rifiutata dall'importer, come NWG)
-            img = testo(r["img"]) or None
-            img2 = testo(r["img2"]) or None
+            lista_img = urls(r["img"])
+            img = lista_img[0] if lista_img else None
+            galleria = [u for u in lista_img[1:] + urls(r["img2"]) if u != img]
             try:
                 stock = max(0, int(float(str(r["stock"]).replace(",", "."))))
             except (TypeError, ValueError):
@@ -138,8 +146,8 @@ class Convertitore:
                 "colore": self.colore(chiave, r),
                 "taglia": {"codice": taglia, "nome": taglia} if taglia else None,
                 "immagine": img,
-                "immagini": [{"url": img2, "tipologia": "Immagine dettaglio"}]
-                            if img2 and img2 != img else [],
+                "immagini": [{"url": u, "tipologia": "Immagine dettaglio"}
+                             for u in dict.fromkeys(galleria)],
                 "pezziPerConfezione": None,
                 "pezziPerSottoImballo": None,
                 "pezziPerImballo": None,
