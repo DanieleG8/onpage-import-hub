@@ -54,7 +54,9 @@ env:
 jobs:
   ops:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    # Il lavoro gira su Railway: qui si fa solo da telecomando. Prima il runner
+    # restava acceso fino a 5h50 a contare i secondi (2.381 minuti in 30 giorni).
+    timeout-minutes: 20
     steps:
       - name: Esegui azione sul hub
         env:
@@ -119,18 +121,28 @@ jobs:
               curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
                 "$HUB_URL/run/$F/$azione?$Q"
               echo
-              echo "== polling /status ogni 30 s fino a fine run =="
+              # POST /run e' fire-and-forget: il job prosegue su Railway anche se
+              # questo workflow finisce. Si resta in ascolto 10 minuti - tanto
+              # bastano a stock/prezzi - e poi si esce lasciando il run al hub.
+              # Si guarda SOLO il fornitore di questo run: prima bastava un job
+              # di un altro fornitore in corso per tenere acceso il runner.
+              echo "== polling /status ogni 30 s (max 10 min) =="
               sleep 20
-              for i in $(seq 1 680); do
+              finito=no
+              for i in $(seq 1 20); do
                 s=$(curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status" || echo '{}')
-                echo "[poll $i] $s"
-                if printf '%s' "$s" | grep -q '"in_corso":{}'; then attivo=no; else attivo=si; fi
-                if [ "$attivo" = "no" ] && [ "$i" -gt 1 ]; then
-                  echo "== run terminato =="
-                  break
-                fi
+                if printf '%s' "$s" | sed -n 's/.*"in_corso":{\([^}]*\)}.*/\1/p' \
+                     | grep -q "\"$F\""; then attivo=si; else attivo=no; fi
+                echo "[poll $i] $F attivo=$attivo"
+                if [ "$attivo" = "no" ] && [ "$i" -gt 1 ]; then finito=si; break; fi
                 sleep 30
               done
+              if [ "$finito" = "si" ]; then
+                echo "== run terminato =="
+              else
+                echo "== run ancora in corso su Railway - il workflow esce qui =="
+                echo "   ricontrolla piu' tardi con azione 'status' (o 'errori' per i falliti)."
+              fi
               echo "== esito finale =="
               curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status"
               ;;
