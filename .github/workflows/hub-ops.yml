@@ -22,6 +22,7 @@ on:
           - reinvia-falliti
           - riarma
           - payload
+          - identita
           - bootstrap
           - stock
           - prezzi
@@ -66,6 +67,12 @@ jobs:
           azione="${{ inputs.azione }}"
           F="${{ inputs.fornitore }}"
           F="${F:-makito}"
+          # la chiave articolo e' "<sigla>-<ref>": la sigla dipende dal fornitore
+          case "$F" in
+            makito) P="02-" ;; nwg) P="A1-" ;;
+            pfconcept) P="34-" ;; garys) P="A3-" ;;
+            *) P="" ;;
+          esac
           case "$azione" in
             health)
               curl -sS -m 60 "$HUB_URL/health"
@@ -92,6 +99,21 @@ jobs:
                 echo "== payload $c: articolo.immagine e prima variante =="
                 curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/payload/$F/$c" \
                   | python3 -c 'import json,sys; a=json.load(sys.stdin)["articolo"]; v=(a.get("varianti") or [{}])[0]; print(json.dumps({"immagine": a.get("immagine"), "gallery": a.get("immagini"), "var0_immagine": v.get("immagine")}, ensure_ascii=False))'
+              done
+              ;;
+            identita)
+              # I CODICI, dal file del fornitore fino al payload inviato: serve a
+              # verificare che su OnPage finisca il codice del fornitore e non una
+              # nostra invenzione. In "chiavi" vanno le REF del fornitore, senza
+              # sigla: 11021, non 02-11021.
+              for r in ${{ inputs.chiavi }}; do
+                echo "===== $F ref $r"
+                echo "-- grezzo (come arriva dall'API del fornitore)"
+                curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/raw/$F/$r" \
+                  | python3 -c 'import json,sys; d=json.load(sys.stdin); e=(d.get("catalogo") or [{}])[0]; var=e.get("variants") or []; print(json.dumps({"ref": e.get("ref"), "name": e.get("name"), "varianti_totali": len(var), "prime_varianti": [{k: v.get(k) for k in ("variant_reference","variant_colorcode","variant_size","variant_name")} for v in var[:3]]}, ensure_ascii=False, indent=1))' || echo "   (snapshot non disponibile)"
+                echo "-- payload (come lo abbiamo inviato)"
+                curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/payload/$F/$P$r" \
+                  | python3 -c 'import json,sys; a=json.load(sys.stdin)["articolo"]; var=a.get("varianti") or []; print(json.dumps({"codiceArticoloFornitore": a.get("codiceArticoloFornitore"), "chiaveArticolo": a.get("chiaveArticolo"), "descrizioneBreve": a.get("descrizioneBreve"), "varianti_totali": len(var), "prime_varianti": [{k: v.get(k) for k in ("codiceFornitore","codiceVariante","_matnr","_variant_name")} for v in var[:3]]}, ensure_ascii=False, indent=1))' || echo "   (payload non disponibile)"
               done
               ;;
             riarma)

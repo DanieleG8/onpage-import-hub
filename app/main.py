@@ -92,6 +92,30 @@ def payload(fornitore: str, chiave: str,
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+@app.get("/raw/{fornitore}/{ref}")
+def raw(fornitore: str, ref: str,
+        x_api_key: str | None = Header(default=None),
+        key: str | None = Query(default=None)):
+    """Record GREZZO del fornitore per una ref, come e' arrivato dalla sua API
+    all'ultimo fetch.
+
+    /payload mostra il risultato della conversione; per verificare la
+    conversione serve anche il punto di partenza, altrimenti si confronta una
+    trasformazione con se stessa. Vale per i fornitori il cui snapshot e' un
+    file per ref (makito); dove il feed e' un unico file enorme la rotta lo
+    dice invece di riversare decine di MB nel log."""
+    _check_key(x_api_key, key)
+    if ".." in ref or "/" in ref:
+        raise HTTPException(400, detail="ref non valida")
+    p = state.dir_fornitore(fornitore) / "work" / "raw" / "snapshot" / f"{ref}.json"
+    if not p.exists():
+        raise HTTPException(404, detail="ref non trovata nello snapshot dell'ultimo fetch")
+    peso = p.stat().st_size
+    if peso > 2_000_000:
+        raise HTTPException(413, detail=f"snapshot non per-ref: {p.name} pesa {peso} byte")
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
 @app.get("/schema/{fornitore}")
 def schema_fornitore(fornitore: str,
                      x_api_key: str | None = Header(default=None),
