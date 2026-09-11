@@ -23,6 +23,7 @@ on:
           - riarma
           - payload
           - identita
+          - grezzo
           - bootstrap
           - stock
           - prezzi
@@ -114,6 +115,16 @@ jobs:
                 echo "-- payload (come lo abbiamo inviato)"
                 curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/payload/$F/$P$r" \
                   | python3 -c 'import json,sys; a=json.load(sys.stdin)["articolo"]; var=a.get("varianti") or []; print(json.dumps({"codiceArticoloFornitore": a.get("codiceArticoloFornitore"), "chiaveArticolo": a.get("chiaveArticolo"), "descrizioneBreve": a.get("descrizioneBreve"), "varianti_totali": len(var), "prime_varianti": [{k: v.get(k) for k in ("codiceFornitore","codiceVariante","_matnr","_variant_name")} for v in var[:3]]}, ensure_ascii=False, indent=1))' || echo "   (payload non disponibile)"
+              done
+              ;;
+            grezzo)
+              # Tutti i campi del record del fornitore, con in evidenza quelli che
+              # somigliano a un codice: serve a rispondere a "da che valore
+              # prendiamo il codice articolo, e ce n'e' un altro piu' adatto?".
+              for r in ${{ inputs.chiavi }}; do
+                echo "===== $F ref $r"
+                curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/raw/$F/$r" \
+                  | python3 -c 'import json,sys; d=json.load(sys.stdin); e=(d.get("catalogo") or [{}])[0]; v=(e.get("variants") or [{}])[0]; cod=lambda o: {k: o[k] for k in sorted(o) if any(s in k.lower() for s in ("ref","cod","sku","matnr","ean","print","id"))}; print("blocchi snapshot:", sorted(d)); print("campi catalogo :", sorted(e)); print("campi codice   :", json.dumps(cod(e), ensure_ascii=False)); print("campi variante :", sorted(v)); print("codici variante:", json.dumps(cod(v), ensure_ascii=False))'
               done
               ;;
             riarma)
