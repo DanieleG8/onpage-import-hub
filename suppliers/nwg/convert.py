@@ -124,7 +124,13 @@ class Convertitore:
             v = it(p.get(b["campo"]))
             if v:
                 blocchi.append(f"{b['etichetta']}: {v.replace(';', ', ')}")
-        return "\n\n".join(x for x in blocchi if x)
+        testo = "\n\n".join(x for x in blocchi if x)
+        # L'importer considera descrizioneLunga obbligatoria e rifiuta la stringa
+        # vuota con "Campo obbligatorio mancante 'descrizioneLunga'": A1-C19222
+        # (nessuna descrizione nel feed) falliva cosi' ogni notte dal 10/09/2026,
+        # deterministico, senza speranza di riuscire al tentativo successivo.
+        # Meglio il nome del prodotto che un articolo che non entra mai.
+        return testo or it(p.get("productName")) or (p.get("productNumber") or "").strip()
 
     # -------------------------------------------------------------- articolo --
     def articolo(self, p: dict) -> dict | None:

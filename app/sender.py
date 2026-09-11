@@ -74,6 +74,13 @@ def invia_lotto(fornitore: str, payloads: dict[str, dict], workers: int | None =
     workers = workers or SEND_WORKERS
     hashes = state.load_hashes(fornitore)
     n_ok = n_err = 0
+    # quanti ok hanno avuto bisogno di un secondo o terzo tentativo: e' la
+    # misura che dice se i retry si ripagano. Un 504 o un ProjectJobFile 404
+    # costano ~250 s a chiave fra attese e tentativi (44 di questi hanno fatto
+    # durare 1h20m il run stock di makito dell'11/09): se nessun ok arrivasse
+    # mai al secondo giro, tanto varrebbe lasciarli al run successivo, che li
+    # ritenta comunque perche' l'hash non viene salvato.
+    n_ok_ritentati = 0
     errori: list[str] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(invia_uno, k, p): k for k, p in payloads.items()}
@@ -82,6 +89,8 @@ def invia_lotto(fornitore: str, payloads: dict[str, dict], workers: int | None =
             state.append_send_log(fornitore, rec)
             if rec.get("ok"):
                 n_ok += 1
+                if (rec.get("tentativi") or 1) > 1:
+                    n_ok_ritentati += 1
                 hashes[rec["chiave"]] = (stati_nuovi or {}).get(rec["chiave"]) \
                     or state.hash_payload(payloads[rec["chiave"]])
                 if n_ok % 50 == 0:
@@ -90,4 +99,6 @@ def invia_lotto(fornitore: str, payloads: dict[str, dict], workers: int | None =
                 n_err += 1
                 errori.append(rec["chiave"])
     state.save_hashes(fornitore, hashes)
-    return {"inviati_ok": n_ok, "errori": n_err, "chiavi_errore": errori[:50]}
+    return {"inviati_ok": n_ok, "errori": n_err,
+            **({"ok_solo_dopo_retry": n_ok_ritentati} if n_ok_ritentati else {}),
+            "chiavi_errore": errori[:50]}

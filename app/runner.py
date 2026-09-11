@@ -113,9 +113,58 @@ def _proxy_url(testo: str) -> str:
 
 
 def _hash_diviso(payload: dict) -> dict:
-    """Doppia impronta: 'd' = dati (payload senza immagini), 'i' = solo immagini."""
+    """Doppia impronta: 'd' = dati (payload senza immagini), 'i' = solo immagini.
+    'c' = impronta per campo, che non entra nel confronto: serve solo a dire
+    COSA e' cambiato quando 'd' cambia (vedi _campi_cambiati)."""
     return {"d": state.hash_payload(_senza_immagini(payload)),
-            "i": state.hash_payload(_solo_immagini(payload))}
+            "i": state.hash_payload(_solo_immagini(payload)),
+            "c": _hash_campi(payload)}
+
+
+def _hash_campi(payload: dict) -> dict:
+    """Un'impronta per campo dell'articolo, piu' le varianti spezzate.
+
+    Nasce da una domanda senza risposta (pfconcept, 09-11/09/2026): il job
+    `prodotti` rimanda ~1.450 articoli ogni notte, il job `stock` nelle ore
+    successive ne trova 2. Qualcosa cambia una volta al giorno e non sono le
+    giacenze, ma per saperlo servirebbe il payload di ieri -- 56 MB per
+    fornitore. Venti impronte per articolo costano mille volte meno e
+    rispondono alla stessa domanda.
+
+    Le varianti sono spezzate perche' e' li' che vive tutto, e separate per
+    ORDINE e INSIEME: se cambia 'varianti:ordine' ma non 'varianti:insieme',
+    il feed ha semplicemente restituito le stesse varianti in ordine diverso e
+    il delta sta inseguendo un fantasma (hash_payload ordina le chiavi dei
+    dizionari, non gli elementi delle liste).
+    """
+    # 12 caratteri bastano per dire "diverso": lo stato si riscrive ogni 50
+    # invii e con lo sha1 intero crescerebbe di qualche MB per fornitore, da
+    # riversare sul Volume decine di volte per run.
+    def h(x) -> str:
+        return state.hash_payload(x)[:12]
+
+    a = payload["articolo"]
+    campi = {k: h(v) for k, v in a.items() if k != "varianti"}
+    var = a.get("varianti") or []
+    per_codice = sorted(var, key=lambda v: str(v.get("codiceVariante")))
+    campi["varianti:ordine"] = h([v.get("codiceVariante") for v in var])
+    campi["varianti:insieme"] = h(sorted(str(v.get("codiceVariante")) for v in var))
+    campi["varianti:giacenze"] = h([v.get("giacenze") for v in per_codice])
+    campi["varianti:listini"] = h([v.get("listini") for v in per_codice])
+    campi["varianti:anagrafica"] = h(
+        [{k: val for k, val in v.items()
+          if k not in ("giacenze", "listini", "immagine", "immagini")} for v in per_codice])
+    return campi
+
+
+def _campi_cambiati(vecchio: dict | None, nuovo: dict) -> list[str]:
+    """Nomi dei campi la cui impronta e' cambiata. Solo diagnostica."""
+    if not vecchio:
+        return ["(articolo nuovo)"]
+    prima, dopo = vecchio.get("c"), nuovo.get("c") or {}
+    if not prima:
+        return ["(stato senza impronte per campo)"]
+    return sorted(k for k in set(prima) | set(dopo) if prima.get(k) != dopo.get(k))
 
 
 def _solo_immagini(payload: dict) -> dict:
@@ -223,6 +272,7 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
         solo_set = set(solo) if solo else None
         solo_dati = 0
         totale = 0
+        campi_cambiati: dict[str, int] = {}
         for f in sorted((out / "json").glob("*.json")):
             totale += 1
             testo = f.read_text(encoding="utf-8")
@@ -243,6 +293,8 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
             if job != "full" and vecchio and vecchio.get("d") == nuovo["d"] \
                     and vecchio.get("i") == nuovo["i"]:
                 continue
+            for campo in _campi_cambiati(vecchio, nuovo):
+                campi_cambiati[campo] = campi_cambiati.get(campo, 0) + 1
             if job != "full" and vecchio and vecchio.get("i") == nuovo["i"]:
                 payload = _senza_immagini(payload)
                 solo_dati += 1
@@ -262,7 +314,13 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
             else {"inviati_ok": 0, "errori": 0}
         esito = {"job": job, "esito": "ok" if contatori.get("errori", 0) == 0 else "errori_parziali",
                  "articoli_totali": totale, "da_inviare": len(payloads),
-                 "solo_dati": solo_dati, **contatori,
+                 "solo_dati": solo_dati,
+                 # perche' questi articoli sono stati rimandati, campo per campo:
+                 # la riga che dice se il delta sta inseguendo un dato vero
+                 **({"campi_cambiati": dict(sorted(campi_cambiati.items(),
+                                                   key=lambda kv: -kv[1]))}
+                    if campi_cambiati else {}),
+                 **contatori,
                  "durata_s": round(time.time() - t0, 1)}
         state.append_run(fornitore, esito)
         return esito

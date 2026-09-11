@@ -206,7 +206,12 @@ class Convertitore:
                 "chiaveArticolo": chiave,
                 "moltiplicatoreVenditaArticolo": None,
                 "descrizioneBreve": (m.get("description") or "").strip() or ref,
-                "descrizioneLunga": "\n\n".join(b for b in blocchi if b),
+                # come makito, nwg e garys: l'importer esige descrizioneLunga
+                # valorizzata e rifiuta la stringa vuota con "Campo obbligatorio
+                # mancante", per sempre. Qui non era ancora capitato, su nwg si'
+                # (A1-C19222, ogni notte dal 10/09/2026).
+                "descrizioneLunga": "\n\n".join(b for b in blocchi if b)
+                                    or (m.get("description") or "").strip() or ref,
                 "immagine": img_art,
                 "immagineAmbientata": ambientata,
                 "immagini": self.galleria(primo.get("imageData"),

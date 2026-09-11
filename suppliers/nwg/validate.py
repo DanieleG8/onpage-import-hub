@@ -33,6 +33,14 @@ def main(argv=None) -> int:
         chiave = a.get("chiaveArticolo") or fp.stem
         if not RE_CHIAVE_ART.match(a.get("chiaveArticolo") or ""):
             e(chiave, "chiaveArticolo non valida")
+        # L'importer rifiuta la stringa vuota su questi due con "Campo
+        # obbligatorio mancante", sempre, per la stessa chiave a ogni giro: e'
+        # un errore che deve fermarsi qui, non consumare un invio ogni notte
+        # (A1-C19222 lo ha fatto dal 10/09/2026). makito/validate.py lo
+        # controllava gia'; qui mancava.
+        for campo in ("descrizioneBreve", "descrizioneLunga"):
+            if not isinstance(a.get(campo), str) or not a[campo].strip():
+                e(chiave, f"articolo.{campo} mancante o vuoto")
         if "ciclo" in a:
             e(chiave, "articolo.ciclo non va inviato (cicli gestiti a mano su OnPage)")
         forn = a.get("fornitore") or {}
