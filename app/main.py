@@ -238,7 +238,7 @@ _ORD_CODICI = ("variant", "reference", "material", "matnr", "sku", "code")
 
 
 @app.get("/makito/ordini")
-def makito_ordini(giorni: int = Query(default=365, ge=1, le=365),
+def makito_ordini(giorni: int = Query(default=350, ge=1, le=356),
                   x_api_key: str | None = Header(default=None),
                   key: str | None = Query(default=None)):
     """Storico ordini/consegne/fatture dal portale Makito. SOLA LETTURA (solo GET).
@@ -255,6 +255,8 @@ def makito_ordini(giorni: int = Query(default=365, ge=1, le=365),
     token = _makito_jwt()
     if not token:
         raise HTTPException(503, detail="not_configured")
+    # il portale rifiuta oltre 356 giorni (365 dichiarati nella specifica, 356
+    # applicati da deliveries e billings): il default sta sotto entrambi
     import datetime as _dt
     oggi = _dt.date.today()
     da = (oggi - _dt.timedelta(days=giorni)).isoformat()
