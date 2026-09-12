@@ -32,6 +32,38 @@ caricamento completo fatto dal repo `F02`.
 4. Primo avvio: `POST /run/makito/bootstrap` (registra lo stato del full gia' caricato da Actions,
    nessun reinvio), poi `POST /run/makito/stock` di collaudo.
 
+## Makito: i due codici articolo (`ref` e `web_reference`, verificato il 12/09/2026)
+
+Il record Makito porta **due** codici articolo, e non sono intercambiabili:
+
+| | esempio | come si ricava |
+|---|---|---|
+| `ref` | `11068` | il codice pieno |
+| `web_reference` | `1068` | per le ref `1xxxx` e' la ref senza la cifra iniziale; per le `2xxxx` coincide |
+
+Sull'intero snapshot (4.609 articoli): **2.284 diverse, 2.323 uguali, 2 senza web_reference,
+nessuna collisione** (azione `codici` di `hub-ops`).
+
+I codici variante che Makito stampa (`variant_reference`, es. `1068SCS/T`) sono costruiti sulla
+**web_reference**: per questo su OnPage l'articolo 11068 mostra varianti che sembrano avere una
+cifra in meno. Non e' un difetto della conversione.
+
+**Per ordinare serve la `ref`.** Letti dalla Orders API gli ordini, le consegne e le fatture veri
+dell'ultimo anno (57 ordini / 434 righe, 53 consegne, 51 fatture, azione `ordini`): ogni riga
+identifica l'articolo con un solo campo, `material`, che vale o la ref piena (`11934`, `14108`) o
+il matnr SAP `ref+colore(3)+taglia(3)` (`14108005000`, `21953002107`). Sei degli articoli ordinati
+hanno web_reference diversa (11934, 14774, 14108, 19885, 13250, 16336) e nei documenti compare
+**sempre la ref**: la web_reference non appare mai.
+
+Quindi:
+- `codiceArticoloFornitore` = `ref` va lasciato dov'e': e' il codice con cui si compra. Volendo
+  rendere cercabile anche la web_reference, va **aggiunta** in un campo suo, non sostituita.
+- il matnr (`_matnr` in `convert.py`) e' la chiave delle giacenze **ed e' anche il codice di riga
+  degli ordini**; oggi non arriva a OnPage. Serve saperlo se un domani gli ordini a Makito
+  partiranno da orderEntry.
+- la specifica OpenAPI (`orders`) descrive la riga con `variant` e `reference` senza descrizioni:
+  nelle risposte vere i campi sono `material` e `quantity`.
+
 ## Struttura
 
 ```
