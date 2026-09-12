@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 import threading
 
 import requests as rq
@@ -42,10 +43,10 @@ _run_in_corso: dict = {}
 
 
 def _esegui(fornitore: str, job: str, workers: int | None = None,
-            solo: list[str] | None = None):
+            solo: list[str] | None = None, prova: bool = False):
     try:
-        _run_in_corso[fornitore] = job
-        run_job(fornitore, job, workers=workers, solo=solo)
+        _run_in_corso[fornitore] = f"{job} (prova)" if prova else job
+        run_job(fornitore, job, workers=workers, solo=solo, prova=prova)
     except Exception as e:                                    # noqa: BLE001
         state.append_run(fornitore, {"job": job, "esito": "eccezione", "errore": str(e)[:500]})
     finally:
@@ -56,8 +57,11 @@ def _esegui(fornitore: str, job: str, workers: int | None = None,
 def run(fornitore: str, job: str,
         workers: int | None = Query(default=None, ge=1, le=6),
         solo: str | None = Query(default=None),
+        prova: bool = Query(default=False),
         x_api_key: str | None = Header(default=None),
         key: str | None = Query(default=None)):
+    """Avvia un job. Con prova=1 il giro si ferma prima dell'invio: dice cosa
+    manderebbe e perche' (campi_cambiati), senza toccare l'importer ne' lo stato."""
     _check_key(x_api_key, key)
     if fornitore not in FORNITORI:
         raise HTTPException(404, detail="fornitore sconosciuto")
@@ -65,10 +69,10 @@ def run(fornitore: str, job: str,
         return JSONResponse({"ok": False, "reason": "run_gia_in_corso",
                              "job_attivo": _run_in_corso[fornitore]}, status_code=409)
     chiavi = [c for c in (solo or "").replace(" ", ",").split(",") if c] or None
-    threading.Thread(target=_esegui, args=(fornitore, job, workers, chiavi),
+    threading.Thread(target=_esegui, args=(fornitore, job, workers, chiavi, prova),
                      daemon=True).start()
     return {"ok": True, "avviato": job, "fornitore": fornitore,
-            "workers": workers, "solo": chiavi}
+            "workers": workers, "solo": chiavi, "prova": prova}
 
 
 @app.get("/status")
@@ -232,6 +236,164 @@ def img_makito(path: str):
     return StreamingResponse(r.iter_content(65536), media_type=tipo)
 
 
+
+
+# ------------------------------------------------- diagnosi del delta -------
+@app.get("/diff/{fornitore}/{chiave}")
+def diff(fornitore: str, chiave: str,
+         x_api_key: str | None = Header(default=None),
+         key: str | None = Query(default=None)):
+    """Perche' questo articolo verrebbe rimandato: quali campi sono cambiati
+    rispetto all'ultimo invio riuscito, e cosa c'e' dentro adesso.
+
+    Confronta il payload convertito nell'ultimo run (ancora sul Volume) con le
+    impronte per campo salvate nello stato. Senza questo si sa solo CHE un
+    articolo e' cambiato -- e per sapere COSA servirebbe il payload di ieri,
+    che non conserviamo perche' pesa decine di MB per fornitore."""
+    _check_key(x_api_key, key)
+    if ".." in chiave or "/" in chiave:
+        raise HTTPException(400, detail="chiave non valida")
+    p = state.dir_fornitore(fornitore) / "work" / "out" / "json" / f"{chiave}.json"
+    if not p.exists():
+        raise HTTPException(404, detail="chiave non trovata nell'ultimo run")
+    from .runner import _hash_campi, _hash_diviso
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    adesso = _hash_campi(payload)
+    vecchio = state.load_hashes(fornitore).get(chiave)
+    if not isinstance(vecchio, dict):
+        return {"chiave": chiave, "stato": "assente o in formato vecchio",
+                "campi_ora": sorted(adesso)}
+    prima = vecchio.get("c")
+    if not prima:
+        return {"chiave": chiave,
+                "stato": "lo stato non ha impronte per campo (invio anteriore all'11/09): "
+                         "il prossimo giro le registra",
+                "dati_uguali": vecchio.get("d") == _hash_diviso(payload)["d"]}
+    cambiati = sorted(k for k in set(prima) | set(adesso) if prima.get(k) != adesso.get(k))
+
+    a = payload["articolo"]
+    def valore(campo):
+        if campo.startswith("varianti:"):
+            var = a.get("varianti") or []
+            per_codice = sorted(var, key=lambda v: str(v.get("codiceVariante")))
+            quale = campo.split(":", 1)[1]
+            if quale == "ordine":
+                return [v.get("codiceVariante") for v in var][:10]
+            if quale == "insieme":
+                return sorted(str(v.get("codiceVariante")) for v in var)[:10]
+            if quale in ("giacenze", "listini"):
+                return [{"variante": v.get("codiceVariante"), quale: v.get(quale)}
+                        for v in per_codice[:3]]
+            return [{k: val for k, val in v.items()
+                     if k not in ("giacenze", "listini", "immagine", "immagini")}
+                    for v in per_codice[:2]]
+        return a.get(campo)
+
+    return {
+        "chiave": chiave,
+        "campi_cambiati": cambiati,
+        "campi_invariati": len(set(prima) | set(adesso)) - len(cambiati),
+        "valori_ora": {c: valore(c) for c in cambiati[:8]},
+        "impronte": {c: {"prima": prima.get(c), "ora": adesso.get(c)} for c in cambiati},
+    }
+
+
+@app.get("/feed-diff/{fornitore}")
+def feed_diff(fornitore: str, campione: int = Query(default=25, ge=1, le=200),
+              x_api_key: str | None = Header(default=None),
+              key: str | None = Query(default=None)):
+    """Riscarica i feed del fornitore e li confronta con la copia in cache
+    (quella dell'ultimo run), SENZA sostituirla.
+
+    Guarda i dati del fornitore invece dei nostri payload: se un feed si
+    rigenera ogni giorno con qualcosa di diverso dentro, si vede qui, prima e
+    indipendentemente dalla conversione. Solo pfconcept per ora: e' il fornitore
+    con piu' feed distinti e l'unico su cui il fenomeno si vede."""
+    _check_key(x_api_key, key)
+    if fornitore != "pfconcept":
+        raise HTTPException(400, detail="per ora solo pfconcept")
+    import tempfile
+    from .runner import pf_fetch
+    base = state.dir_fornitore(fornitore)
+    cache = base / "dumps"
+    with tempfile.TemporaryDirectory() as tmp:
+        rc = pf_fetch.main(["--out", tmp, "--refresh", "tutto"])   # niente --dumps-cache
+        if rc != 0:
+            raise HTTPException(502, detail=f"fetch fallito (rc {rc})")
+        fresco = Path(tmp) / "snapshot"
+        out = {}
+        for f in sorted(fresco.glob("*.json")):
+            vecchio = cache / f.name
+            if not vecchio.exists():
+                out[f.stem] = {"cache": "assente"}
+                continue
+            if f.read_bytes() == vecchio.read_bytes():
+                out[f.stem] = {"identico": True,
+                               "cache_del": _quando(vecchio), "byte": f.stat().st_size}
+                continue
+            diff = _diff_json(json.loads(vecchio.read_text(encoding="utf-8")),
+                              json.loads(f.read_text(encoding="utf-8")))
+            out[f.stem] = {"identico": False, "cache_del": _quando(vecchio),
+                           "byte_prima": vecchio.stat().st_size, "byte_ora": f.stat().st_size,
+                           "differenze": diff["totale"],
+                           # il dato che conta: QUALE campo cambia, e su quanti record
+                           "per_campo": dict(sorted(diff["per_campo"].items(),
+                                                    key=lambda kv: -kv[1])[:20]),
+                           "esempi": diff["esempi"][:campione]}
+    return out
+
+
+def _quando(p: Path) -> str:
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
+
+
+def _diff_json(a, b, limite: int = 4000) -> dict:
+    """Differenze fra due JSON, aggregate per percorso.
+
+    'per_campo' e' il percorso con gli indici di lista sostituiti da [*]: e' la
+    riga che dice "questo campo cambia su 1.400 record" invece di elencare 1.400
+    percorsi diversi."""
+    esempi: list[dict] = []
+    per_campo: dict[str, int] = {}
+    totale = 0
+
+    def taglia(x):
+        # sempre json.dumps: cosi' 1 e "1" non si confondono, ed e' proprio il
+        # genere di differenza (numero diventato stringa) che fa scattare il delta
+        t = json.dumps(x, ensure_ascii=False)
+        return t[:120] + ("…" if len(t) > 120 else "")
+
+    def segna(path: str, va, vb):
+        nonlocal totale
+        totale += 1
+        generico = re.sub(r"\[\d+\]", "[*]", path)
+        per_campo[generico] = per_campo.get(generico, 0) + 1
+        if len(esempi) < 200:
+            esempi.append({"campo": path, "prima": taglia(va), "ora": taglia(vb)})
+
+    def cammina(x, y, path=""):
+        if totale >= limite:
+            return
+        if type(x) is not type(y):
+            segna(path or "(radice)", x, y)
+        elif isinstance(x, dict):
+            for k in sorted(set(x) | set(y)):
+                if k not in x or k not in y:
+                    segna(f"{path}.{k}", x.get(k, "(assente)"), y.get(k, "(assente)"))
+                else:
+                    cammina(x[k], y[k], f"{path}.{k}")
+        elif isinstance(x, list):
+            if len(x) != len(y):
+                segna(f"{path}[]", f"{len(x)} elementi", f"{len(y)} elementi")
+            for i, (xi, yi) in enumerate(zip(x, y)):
+                cammina(xi, yi, f"{path}[{i}]")
+        elif x != y:
+            segna(path or "(radice)", x, y)
+
+    cammina(a, b)
+    return {"totale": totale if totale < limite else f"{limite}+ (troncato)",
+            "per_campo": per_campo, "esempi": esempi}
 
 # ---------------------------------------------------- Makito: ordini --------
 _ORD_CODICI = ("variant", "reference", "material", "matnr", "sku", "code")

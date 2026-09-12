@@ -193,8 +193,14 @@ def _senza_immagini(payload: dict) -> dict:
 
 
 def run_job(fornitore: str, job: str, workers: int | None = None,
-            solo: list[str] | None = None) -> dict:
-    """Esegue un job end-to-end; ritorna il riepilogo (registrato in runs.jsonl)."""
+            solo: list[str] | None = None, prova: bool = False) -> dict:
+    """Esegue un job end-to-end; ritorna il riepilogo (registrato in runs.jsonl).
+
+    Con prova=True il giro si ferma prima dell'invio: fetch, conversione e delta
+    completi, `campi_cambiati` compreso, ma niente chiamate all'importer e
+    niente stato riscritto. Serve a chiedere "cosa manderesti, e perche'?"
+    senza pagare le ore di invio -- su pfconcept la differenza fra dieci minuti
+    e due ore e tre quarti."""
     if fornitore not in FORNITORI:
         raise ValueError(f"fornitore sconosciuto: {fornitore}")
     cfg = FORNITORI[fornitore]
@@ -272,6 +278,7 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
         solo_set = set(solo) if solo else None
         solo_dati = 0
         totale = 0
+        impronte_aggiunte = 0
         campi_cambiati: dict[str, int] = {}
         for f in sorted((out / "json").glob("*.json")):
             totale += 1
@@ -292,6 +299,13 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
                 vecchio = None
             if job != "full" and vecchio and vecchio.get("d") == nuovo["d"] \
                     and vecchio.get("i") == nuovo["i"]:
+                # l'articolo non si invia, ma se il suo stato e' anteriore alle
+                # impronte per campo va completato adesso: altrimenti al primo
+                # cambiamento la diagnosi dira' solo "stato senza impronte" e
+                # bisognera' aspettare un altro giro per sapere quale campo.
+                if not vecchio.get("c"):
+                    vecchio["c"] = nuovo["c"]
+                    impronte_aggiunte += 1
                 continue
             for campo in _campi_cambiati(vecchio, nuovo):
                 campi_cambiati[campo] = campi_cambiati.get(campo, 0) + 1
@@ -308,6 +322,23 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
             state.append_run(fornitore, esito)
             return esito
 
+        if prova:
+            # giro a vuoto: si e' calcolato tutto, non si manda niente e non si
+            # tocca lo stato (nemmeno le impronte appena completate, che
+            # verranno riscritte al primo giro vero).
+            esito = {"job": job, "esito": "prova", "articoli_totali": totale,
+                     "da_inviare": len(payloads), "solo_dati": solo_dati,
+                     **({"campi_cambiati": dict(sorted(campi_cambiati.items(),
+                                                       key=lambda kv: -kv[1]))}
+                        if campi_cambiati else {}),
+                     "chiavi": sorted(payloads)[:50],
+                     "durata_s": round(time.time() - t0, 1)}
+            state.append_run(fornitore, esito)
+            return esito
+
+        if impronte_aggiunte:
+            state.save_hashes(fornitore, hashes)
+
         # 4. invio parallelo
         contatori = invia_lotto(fornitore, payloads, workers=workers,
                                 stati_nuovi=stati_nuovi) if payloads \
@@ -320,6 +351,7 @@ def run_job(fornitore: str, job: str, workers: int | None = None,
                  **({"campi_cambiati": dict(sorted(campi_cambiati.items(),
                                                    key=lambda kv: -kv[1]))}
                     if campi_cambiati else {}),
+                 **({"impronte_completate": impronte_aggiunte} if impronte_aggiunte else {}),
                  **contatori,
                  "durata_s": round(time.time() - t0, 1)}
         state.append_run(fornitore, esito)

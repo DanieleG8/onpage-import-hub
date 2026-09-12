@@ -26,6 +26,9 @@ on:
           - grezzo
           - ordini
           - codici
+          - prova
+          - diff
+          - feed-diff
           - bootstrap
           - stock
           - prezzi
@@ -51,6 +54,10 @@ on:
         description: "Worker per i job di invio (vuoto = default 3)"
         required: false
         default: ""
+      job:
+        description: "Job da simulare con l'azione prova (stock | prezzi | prodotti)"
+        required: false
+        default: "prodotti"
 
 env:
   HUB_URL: https://onpage-import-hub-production.up.railway.app
@@ -142,6 +149,44 @@ jobs:
               R=$(printf '%s' "${{ inputs.chiavi }}" | tr ' ' ',')
               curl -sS -m 600 -H "x-api-key: $HUB_API_KEY" \
                 "$HUB_URL/makito/codici?ref=$R" \
+                | python3 -m json.tool --no-ensure-ascii
+              ;;
+            prova)
+              # Giro a vuoto: dice cosa manderebbe e PERCHE' (campi_cambiati),
+              # senza toccare l'importer ne' lo stato. Nato per pfconcept, che
+              # rimanda ~1.450 articoli a notte: la diagnosi costa dieci minuti
+              # invece delle due ore e tre quarti di un giro vero.
+              J="${{ inputs.job }}"; J="${J:-prodotti}"
+              curl -sS -m 60 -X POST -H "x-api-key: $HUB_API_KEY" \
+                "$HUB_URL/run/$F/$J?prova=1"
+              echo
+              echo "== polling /status ogni 30 s (max 20 min) =="
+              sleep 20
+              for i in $(seq 1 40); do
+                s=$(curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status" || echo '{}')
+                if printf '%s' "$s" | sed -n 's/.*"in_corso":{\([^}]*\)}.*/\1/p' \
+                     | grep -q "\"$F\""; then attivo=si; else attivo=no; fi
+                echo "[poll $i] $F attivo=$attivo"
+                if [ "$attivo" = "no" ] && [ "$i" -gt 1 ]; then break; fi
+                sleep 30
+              done
+              echo "== esito (ultimo run in coda a ultimi_run) =="
+              curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/status" \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); f="'"$F"'"; r=(d["ultimi_run"].get(f) or [])[-1:]; print(json.dumps(r, ensure_ascii=False, indent=1))'
+              ;;
+            diff)
+              # Perche' QUESTO articolo verrebbe rimandato. In "chiavi" le chiavi
+              # intere (34-100182), separate da spazio.
+              for c in ${{ inputs.chiavi }}; do
+                echo "===== $F $c"
+                curl -sS -m 120 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/diff/$F/$c" \
+                  | python3 -m json.tool --no-ensure-ascii
+              done
+              ;;
+            feed-diff)
+              # Riscarica i feed del fornitore e li confronta con la copia in
+              # cache: guarda i dati del fornitore, non i nostri payload.
+              curl -sS -m 600 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/feed-diff/$F" \
                 | python3 -m json.tool --no-ensure-ascii
               ;;
             riarma)
