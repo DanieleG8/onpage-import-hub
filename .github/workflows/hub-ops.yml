@@ -24,6 +24,8 @@ on:
           - payload
           - identita
           - grezzo
+          - ordini
+          - codici
           - bootstrap
           - stock
           - prezzi
@@ -126,6 +128,21 @@ jobs:
                 curl -sS -m 60 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/raw/$F/$r" \
                   | python3 -c 'import json,sys; d=json.load(sys.stdin); e=(d.get("catalogo") or [{}])[0]; v=(e.get("variants") or [{}])[0]; cod=lambda o: {k: o[k] for k in sorted(o) if any(s in k.lower() for s in ("ref","cod","sku","matnr","ean","print","id"))}; print("blocchi snapshot:", sorted(d)); print("campi catalogo :", sorted(e)); print("campi codice   :", json.dumps(cod(e), ensure_ascii=False)); print("campi variante :", sorted(v)); print("codici variante:", json.dumps(cod(v), ensure_ascii=False))'
               done
+              ;;
+            ordini)
+              # SOLA LETTURA sul portale Makito: la riga d'ordine ha sia
+              # "variant" sia "reference" e la specifica non dice quale porti il
+              # codice articolo. I documenti veri sì.
+              curl -sS -m 300 -H "x-api-key: $HUB_API_KEY" "$HUB_URL/makito/ordini" \
+                | python3 -m json.tool --no-ensure-ascii
+              ;;
+            codici)
+              # Censimento ref vs web_reference su tutto lo snapshot. In "chiavi"
+              # le ref da mostrare comunque (senza sigla), separate da spazio.
+              R=$(printf '%s' "${{ inputs.chiavi }}" | tr ' ' ',')
+              curl -sS -m 600 -H "x-api-key: $HUB_API_KEY" \
+                "$HUB_URL/makito/codici?ref=$R" \
+                | python3 -m json.tool --no-ensure-ascii
               ;;
             riarma)
               printf '%s' "${{ inputs.chiavi }}" \

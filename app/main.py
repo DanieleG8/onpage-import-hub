@@ -232,6 +232,130 @@ def img_makito(path: str):
     return StreamingResponse(r.iter_content(65536), media_type=tipo)
 
 
+
+# ---------------------------------------------------- Makito: ordini --------
+_ORD_CODICI = ("variant", "reference", "material", "matnr", "sku", "code")
+
+
+@app.get("/makito/ordini")
+def makito_ordini(giorni: int = Query(default=365, ge=1, le=365),
+                  x_api_key: str | None = Header(default=None),
+                  key: str | None = Query(default=None)):
+    """Storico ordini/consegne/fatture dal portale Makito. SOLA LETTURA (solo GET).
+
+    Serve a rispondere a una domanda che la specifica OpenAPI non risolve: la
+    riga d'ordine (ItemDTO) ha sia "variant" sia "reference", entrambi senza
+    descrizione. Sapere quale dei due porta il codice articolo - e se quel
+    codice e' la ref o la web_reference - decide se possiamo cambiare il codice
+    fornitore mostrato su OnPage. I documenti veri lo dicono; la specifica no.
+
+    Ritorna solo i campi che somigliano a un codice, piu' i conteggi: niente
+    prezzi, niente anagrafiche cliente."""
+    _check_key(x_api_key, key)
+    token = _makito_jwt()
+    if not token:
+        raise HTTPException(503, detail="not_configured")
+    import datetime as _dt
+    oggi = _dt.date.today()
+    da = (oggi - _dt.timedelta(days=giorni)).isoformat()
+    hdr = {"Authorization": f"Bearer {token}"}
+    out: dict = {"periodo": {"da": da, "a": oggi.isoformat()}}
+    for gruppo in ("sales-order", "deliveries", "billings"):
+        url = f"https://apis.makito.es/orders/{gruppo}"
+        try:
+            r = rq.get(url, headers=hdr, params={"fromDate": da, "toDate": oggi.isoformat()},
+                       timeout=120)
+        except rq.RequestException as e:                      # noqa: BLE001
+            out[gruppo] = {"errore": str(e)[:200]}
+            continue
+        if r.status_code != 200:
+            out[gruppo] = {"http": r.status_code, "corpo": r.text[:300]}
+            continue
+        try:
+            body = r.json()
+        except ValueError:
+            out[gruppo] = {"http": 200, "corpo_non_json": r.text[:300]}
+            continue
+        docs = body if isinstance(body, list) else \
+            next((v for v in (body or {}).values() if isinstance(v, list)), [])
+        righe = [i for d in docs if isinstance(d, dict) for i in (d.get("items") or [])]
+        campioni, visti = [], set()
+        for i in righe:
+            cod = {k: i.get(k) for k in _ORD_CODICI if i.get(k) not in (None, "")}
+            firma = json.dumps(cod, sort_keys=True)
+            if firma not in visti:
+                visti.add(firma)
+                campioni.append(cod)
+            if len(campioni) >= 25:
+                break
+        out[gruppo] = {
+            "http": 200,
+            "documenti": len(docs),
+            "righe": len(righe),
+            "campi_documento": sorted(docs[0]) if docs and isinstance(docs[0], dict) else [],
+            "campi_riga": sorted(righe[0]) if righe and isinstance(righe[0], dict) else [],
+            "codici_riga": campioni,
+        }
+    return out
+
+
+@app.get("/makito/codici")
+def makito_codici(ref: str = Query(default=""),
+                  campione: int = Query(default=20, ge=0, le=200),
+                  x_api_key: str | None = Header(default=None),
+                  key: str | None = Query(default=None)):
+    """Censimento dei due codici articolo Makito sull'intero snapshot.
+
+    Il record del fornitore porta sia "ref" (11068) sia "web_reference" (1068):
+    i codici variante sono costruiti sulla seconda, il matnr con cui si
+    agganciano le giacenze sulla prima. Prima di cambiare quale delle due
+    finisce nel codice fornitore su OnPage serve sapere quanti articoli
+    cambierebbero e se due ref condividono la stessa web_reference.
+
+    In "ref" si possono elencare (separate da virgola) le ref da mostrare
+    comunque, per controllare in anticipo articoli gia' finiti nelle offerte."""
+    _check_key(x_api_key, key)
+    d = state.dir_fornitore("makito") / "work" / "raw" / "snapshot"
+    if not d.is_dir():
+        raise HTTPException(404, detail="nessuno snapshot makito sul volume")
+    volute = {r.strip() for r in ref.split(",") if r.strip()}
+    conte = {"file": 0, "uguali": 0, "diversi": 0, "mancante": 0, "illeggibili": 0}
+    per_web: dict[str, list[str]] = {}
+    esempi_diversi: list[dict] = []
+    richieste: list[dict] = []
+    for f in sorted(d.glob("*.json")):
+        conte["file"] += 1
+        try:
+            e = (json.loads(f.read_text(encoding="utf-8")).get("catalogo") or [{}])[0]
+        except Exception:                                     # noqa: BLE001
+            conte["illeggibili"] += 1
+            continue
+        r_ref = str(e.get("ref") or f.stem)
+        web = e.get("web_reference")
+        web = str(web).strip() if web not in (None, "") else ""
+        if not web:
+            conte["mancante"] += 1
+        elif web == r_ref:
+            conte["uguali"] += 1
+        else:
+            conte["diversi"] += 1
+            if len(esempi_diversi) < campione:
+                esempi_diversi.append({"ref": r_ref, "web_reference": web})
+        if web:
+            per_web.setdefault(web, []).append(r_ref)
+        if r_ref in volute:
+            richieste.append({"ref": r_ref, "web_reference": web,
+                              "cambia": bool(web) and web != r_ref})
+    collisioni = {w: rs for w, rs in per_web.items() if len(rs) > 1}
+    return {
+        "conteggi": conte,
+        "collisioni": {"quante": len(collisioni),
+                       "esempi": dict(sorted(collisioni.items())[:20])},
+        "esempi_diversi": esempi_diversi,
+        "ref_richieste": richieste,
+        "ref_non_trovate": sorted(volute - {r["ref"] for r in richieste}),
+    }
+
 # ------------------------------------------------------------- scheduler ----
 @app.on_event("startup")
 def startup():
