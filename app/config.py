@@ -39,7 +39,17 @@ CRON_NWG_PRODOTTI = os.environ.get("CRON_NWG_PRODOTTI", "")
 # PF Concept: spenti di default finche' il collaudo non e' concluso.
 # Cadenze consigliate dal fornitore: stock 2x/giorno (mattina e ~13:00),
 # prodotti giornaliero, prezzi settimanale (aggiornati nel weekend).
-CRON_PF_STOCK = os.environ.get("CRON_PF_STOCK", "")        # es. "0 5,11 * * *"
+#
+# ATTENZIONE agli orari (misurato il 12/09/2026 con /feed-diff). Il feed stock
+# si rigenera due volte al giorno, alle ~23:18 e alle ~11:04 UTC. Con lo stock
+# alle 05:00 e alle 11:00 succedeva questo:
+#   - 05:00 e 11:00 leggevano la generazione delle 23:18, gia' consumata dal
+#     job prodotti delle 02:20 -> trovavano 2 articoli;
+#   - la generazione delle 11:04 non la leggeva NESSUNO;
+#   - tutto il movimento di giacenze del giorno finiva addosso a "prodotti",
+#     che ci metteva 2h46m per ~1.450 articoli.
+# I cron dello stock vanno DOPO le generazioni: "30 11,23 * * *".
+CRON_PF_STOCK = os.environ.get("CRON_PF_STOCK", "")        # consigliato "30 11,23 * * *"
 CRON_PF_PRODOTTI = os.environ.get("CRON_PF_PRODOTTI", "")  # es. "20 2 * * *"
 CRON_PF_PREZZI = os.environ.get("CRON_PF_PREZZI", "")      # es. "50 2 * * 1"
 # GARY'S: i file arrivano dal deposito manuale su Dropbox -> niente cron di

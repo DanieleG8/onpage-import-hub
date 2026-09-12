@@ -32,6 +32,36 @@ caricamento completo fatto dal repo `F02`.
 4. Primo avvio: `POST /run/makito/bootstrap` (registra lo stato del full gia' caricato da Actions,
    nessun reinvio), poi `POST /run/makito/stock` di collaudo.
 
+## PF Concept: perche' "prodotti" rimandava ~1.450 articoli a notte (12/09/2026)
+
+Sono le **giacenze**, e il motivo per cui non sembravano loro e' un incastro di
+orari, non un campo.
+
+Il feed stock si rigenera **due volte al giorno, alle ~23:18 e alle ~11:04 UTC**
+(misurato con `/feed-diff`: la copia in cache delle 11:00 portava
+`creationDateTime` 01:18 ora fornitore, quella scaricata alle 12:03 portava
+13:04). I cron erano alle 05:00 e alle 11:00, cioe' **prima** della generazione
+di mezzogiorno e **dopo** che il job `prodotti` delle 02:20 aveva gia' consumato
+quella della notte. Risultato:
+
+- `stock` alle 05:00 e alle 11:00 rileggeva la stessa generazione gia' registrata
+  da `prodotti` -> trovava 2 articoli, e sembrava che le giacenze non si
+  muovessero;
+- la generazione delle 11:04 **non la leggeva nessuno**: le giacenze del
+  pomeriggio non arrivavano mai su OnPage;
+- tutto il movimento della giornata cadeva addosso a `prodotti`, che per quello
+  ci metteva 2h46m.
+
+Misura con `prodotti?prova=1` alle 12:09, sette ore dopo la conversione delle
+02:20: **470 articoli su 2.830 da rimandare, di cui 395 per sole giacenze**, 3
+per i listini (il feed prezzi si rigenera il sabato alle 05:15) e 73 con lo
+stato anteriore alle impronte per campo. Su 24 ore, ~1.450 torna.
+
+Cura: spostare i cron dello stock **dopo** le generazioni, `CRON_PF_STOCK` =
+`"30 11,23 * * *"` (variabile su Railway). Cosi' ogni generazione viene letta
+dal job che le compete, `prodotti` alle 02:20 trova le giacenze gia' registrate,
+e le giacenze del pomeriggio smettono di restare fuori.
+
 ## Makito: i due codici articolo (`ref` e `web_reference`, verificato il 12/09/2026)
 
 Il record Makito porta **due** codici articolo, e non sono intercambiabili:
